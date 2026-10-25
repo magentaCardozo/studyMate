@@ -1,0 +1,73 @@
+# ════════════════════════════════════════════════════════════════
+#  StudyMate AI — fichiers à ne jamais versionner
+# ════════════════════════════════════════════════════════════════
+
+# ─── Secrets et configuration locale ───────────────────────────
+# Variables d'environnement (mots de passe, clés JWT, clé d'API IA…)
+.env
+.env.*
+!.env.example
+!**/.env.example
+# État de l'infrastructure AWS (identifiants d'instance, IP…)
+infrastructure/deployment/aws/.state
+# Clés de signature Android et certificats
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+# Configuration locale du SDK Android (chemin propre à la machine)
+local.properties
+
+# ─── Dépendances ───────────────────────────────────────────────
+node_modules/
+
+# ─── Builds et fichiers générés ────────────────────────────────
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.vite/
+backend/prisma/generated/
+
+# ─── Android / Gradle / Kotlin ─────────────────────────────────
+.gradle/
+.kotlin/
+android/app/build/
+android/build/
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+# APK / AAB produits (distribués via le serveur, pas via Git)
+*.apk
+*.aab
+android/dist/
+infrastructure/deployment/downloads/*
+!infrastructure/deployment/downloads/.keep
+# Le wrapper Gradle et les schémas Room DOIVENT rester versionnés :
+!android/gradle/wrapper/gradle-wrapper.jar
+!android/app/schemas/
+
+# ─── Données et sauvegardes locales ────────────────────────────
+*.dump
+*.sql.gz
+*.sqlite
+*.db
+uploads/
+tmp/
+
+# ─── Journaux ──────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ─── Éditeurs et systèmes ──────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*~

@@ -1,0 +1,142 @@
+package com.studymateai.navigation
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.studymateai.R
+import com.studymateai.core.designsystem.OfflineBanner
+import com.studymateai.core.designsystem.SM
+import com.studymateai.feature.auth.AuthScreen
+import com.studymateai.feature.coach.ChatScreen
+import com.studymateai.feature.coach.CoachScreen
+import com.studymateai.feature.common.container
+import com.studymateai.feature.courses.CourseContentScreen
+import com.studymateai.feature.courses.CoursesScreen
+import com.studymateai.feature.dashboard.HomeScreen
+import com.studymateai.feature.documents.DocumentScreen
+import com.studymateai.feature.lessons.LessonScreen
+import com.studymateai.feature.notes.NoteEditorScreen
+import com.studymateai.feature.revision.FlashcardStudyScreen
+import com.studymateai.feature.revision.GenerateDialog
+import com.studymateai.feature.revision.QuizScreen
+import com.studymateai.feature.revision.RevisionScreen
+import com.studymateai.feature.scanner.ScannerScreen
+import com.studymateai.feature.settings.ProfileScreen
+
+private data class Tab(val route: String, val label: Int, val icon: ImageVector)
+
+private val tabs = listOf(
+    Tab("home", R.string.nav_home, Icons.Outlined.Home),
+    Tab("courses", R.string.nav_courses, Icons.Outlined.MenuBook),
+    Tab("revision", R.string.nav_revision, Icons.Outlined.AutoAwesome),
+    Tab("coach", R.string.nav_coach, Icons.Outlined.Psychology),
+    Tab("profile", R.string.nav_profile, Icons.Outlined.Person),
+)
+
+@Composable
+fun AppNavigation() {
+    val c = container()
+    val nav = rememberNavController()
+    val expired by c.sessionExpired.collectAsState()
+    val online by c.isOnline.collectAsState()
+    val start = remember { if (c.auth.isLoggedIn) "home" else "auth" }
+    val entry by nav.currentBackStackEntryAsState()
+    val route = entry?.destination?.route
+    // Génération : (dossier, sous-dossier, leçon, type)
+    var generate by remember { mutableStateOf<GenerateRequestUi?>(null) }
+
+    LaunchedEffect(expired) {
+        if (expired) nav.navigate("auth") { popUpTo(0) }
+    }
+
+    Scaffold(
+        containerColor = SM.Ivory,
+        bottomBar = {
+            if (route in tabs.map { it.route }) {
+                NavigationBar(containerColor = SM.White) {
+                    tabs.forEach { tab ->
+                        NavigationBarItem(
+                            selected = route == tab.route,
+                            onClick = { nav.navigateTab(tab.route) },
+                            icon = { Icon(tab.icon, null) },
+                            label = { Text(stringResource(tab.label), maxLines = 1) },
+                            colors = NavigationBarItemDefaults.colors(selectedIconColor = SM.Crimson, selectedTextColor = SM.Crimson, indicatorColor = SM.Crimson.copy(alpha = 0.10f)),
+                        )
+                    }
+                }
+            }
+        },
+    ) { padding ->
+        Column(Modifier.padding(padding)) {
+            if (!online && route != "auth") OfflineBanner()
+            NavHost(nav, startDestination = start) {
+                composable("auth") { AuthScreen { nav.navigate("home") { popUpTo(0) } } }
+                composable("home") {
+                    HomeScreen(onCourse = { nav.navigate("course/$it") }, onCourses = { nav.navigateTab("courses") }, onStudy = { nav.navigate("study") }, onCoach = { nav.navigateTab("coach") }, onScan = { nav.navigate("scan") })
+                }
+                composable("courses") { CoursesScreen(onCourse = { nav.navigate("course/$it") }) }
+                composable("course/{courseId}") { e ->
+                    val courseId = e.arguments!!.getString("courseId")!!
+                    CourseContentScreen(courseId, null, nav::popBackStack, onFolder = { nav.navigate("folder/$courseId/$it") }, onLesson = { nav.navigate("lesson/$it") }, onDocument = { nav.navigate("document/$it") }, onNewNote = { nav.navigate("note/new?courseId=$courseId") }, onScan = { nav.navigate("scan?courseId=$courseId") }, onGenerate = { kind -> generate = GenerateRequestUi(courseId, null, null, kind) })
+                }
+                composable("folder/{courseId}/{folderId}") { e ->
+                    val courseId = e.arguments!!.getString("courseId")!!
+                    val folderId = e.arguments!!.getString("folderId")
+                    CourseContentScreen(courseId, folderId, nav::popBackStack, onFolder = { nav.navigate("folder/$courseId/$it") }, onLesson = { nav.navigate("lesson/$it") }, onDocument = { nav.navigate("document/$it") }, onNewNote = { nav.navigate("note/new?courseId=$courseId") }, onScan = { nav.navigate("scan?courseId=$courseId&folderId=$folderId") }, onGenerate = { kind -> generate = GenerateRequestUi(null, folderId, null, kind) })
+                }
+                composable("lesson/{id}") { e ->
+                    val id = e.arguments!!.getString("id")!!
+                    LessonScreen(id, nav::popBackStack, onDocument = { nav.navigate("document/$it") }, onNote = { noteId -> nav.navigate(if (noteId != null) "note/$noteId" else "note/new?lessonId=$id") }, onAsk = { nav.navigate("chat?lessonId=$id") }, onGenerate = { generate = GenerateRequestUi(null, null, id, "summary") })
+                }
+                composable("document/{id}") { e -> DocumentScreen(e.arguments!!.getString("id")!!, nav::popBackStack) }
+                composable("note/new?courseId={courseId}&lessonId={lessonId}") { e -> NoteEditorScreen(null, e.arguments?.getString("courseId"), e.arguments?.getString("lessonId"), nav::popBackStack) }
+                composable("note/{id}") { e -> NoteEditorScreen(e.arguments!!.getString("id"), null, null, nav::popBackStack) }
+                composable("scan?courseId={courseId}&folderId={folderId}") { e ->
+                    ScannerScreen(e.arguments?.getString("courseId"), e.arguments?.getString("folderId"), nav::popBackStack) { docId -> nav.navigate("document/$docId") { popUpTo("scan?courseId={courseId}&folderId={folderId}") { inclusive = true } } }
+                }
+                composable("revision") { RevisionScreen(onStudy = { deck -> nav.navigate(if (deck != null) "study?deckId=$deck" else "study") }, onQuiz = { nav.navigate("quiz/$it") }, onGenerate = { generate = GenerateRequestUi(null, null, null, "qcm") }) }
+                composable("study?deckId={deckId}") { e -> FlashcardStudyScreen(e.arguments?.getString("deckId"), nav::popBackStack) }
+                composable("quiz/{id}") { e -> QuizScreen(e.arguments!!.getString("id")!!, nav::popBackStack) }
+                composable("coach") { CoachScreen(onChat = { nav.navigate("chat") }, onLesson = { nav.navigate("lesson/$it") }) }
+                composable("chat?lessonId={lessonId}&courseId={courseId}") { e -> ChatScreen(e.arguments?.getString("courseId"), e.arguments?.getString("lessonId"), nav::popBackStack) }
+                composable("profile") { ProfileScreen(onDocument = { nav.navigate("document/$it") }, onLoggedOut = { nav.navigate("auth") { popUpTo(0) } }) }
+            }
+        }
+    }
+    generate?.let { g -> GenerateDialog(g.courseId, g.folderId, g.lessonId, g.kind) { generate = null } }
+}
+
+private data class GenerateRequestUi(val courseId: String?, val folderId: String?, val lessonId: String?, val kind: String)
+
+private fun NavHostController.navigateTab(route: String) = navigate(route) {
+    popUpTo(graph.findStartDestination().id) { saveState = true }
+    launchSingleTop = true
+    restoreState = true
+}

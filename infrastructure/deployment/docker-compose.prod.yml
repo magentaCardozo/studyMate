@@ -1,0 +1,86 @@
+# StudyMate AI — production mono-serveur (EC2)
+# Différences avec le docker-compose de développement :
+#  - documents dans Amazon S3 (rôle IAM de l'instance, aucune clé stockée) au lieu de SeaweedFS ;
+#  - Caddy en frontal : HTTPS automatique (Let's Encrypt) ; seuls 80/443 sont exposés ;
+#  - cookies Secure, base et API non exposées.
+# Lancement : docker compose -f infrastructure/deployment/docker-compose.prod.yml --env-file .env.prod up -d --build
+name: studymate
+
+x-backend-env: &backend-env
+  NODE_ENV: production
+  PORT: 4000
+  # Caddy → nginx → API
+  TRUST_PROXY_HOPS: 2
+  DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+  FILE_TOKEN_SECRET: ${FILE_TOKEN_SECRET}
+  COOKIE_SECURE: "true"
+  CORS_ORIGINS: https://${DOMAIN}
+  PUBLIC_WEB_URL: https://${DOMAIN}
+  STORAGE_DRIVER: s3
+  S3_REGION: ${AWS_REGION}
+  S3_BUCKET: ${S3_BUCKET}
+  S3_FORCE_PATH_STYLE: "false"
+  AI_PROVIDER: ${AI_PROVIDER:-mock}
+  AI_MODEL: ${AI_MODEL:-claude-opus-5-5}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  AI_DAILY_REQUEST_LIMIT: ${AI_DAILY_REQUEST_LIMIT:-60}
+  MAX_UPLOAD_MB: 25
+  LOG_LEVEL: info
+  MAIL_PROVIDER: console
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      retries: 30
+
+  api:
+    build: { context: ../.., dockerfile: backend/Dockerfile }
+    image: studymate-backend:prod
+    restart: unless-stopped
+    environment: *backend-env
+    depends_on:
+      db: { condition: service_healthy }
+
+  worker:
+    image: studymate-backend:prod
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    environment: *backend-env
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck: { disable: true }
+
+  web:
+    build: ../../web
+    image: studymate-web:prod
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./downloads:/srv/downloads:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web]
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

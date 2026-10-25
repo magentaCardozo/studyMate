@@ -1,0 +1,17 @@
+# Certificat HTTPS obtenu et renouvelé automatiquement (Let's Encrypt).
+{$DOMAIN} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	# Application Android de test, téléchargeable depuis le téléphone.
+	handle_path /telecharger/* {
+		root * /srv/downloads
+		header Content-Disposition attachment
+		file_server
+	}
+	handle {
+		reverse_proxy web:80
+	}
+}

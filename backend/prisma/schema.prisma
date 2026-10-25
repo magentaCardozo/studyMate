@@ -1,0 +1,701 @@
+// StudyMate AI — modèle de données relationnel.
+// Les identifiants sont des UUID : les clients hors ligne (Android) peuvent les
+// générer localement pour garantir des opérations idempotentes à la synchronisation.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Utilisateurs & sécurité ─────────────────────────────
+
+model User {
+  id                String    @id @default(uuid()) @db.Uuid
+  name              String
+  email             String    @unique
+  passwordHash      String?
+  externalAuthId    String?   @unique
+  preferredLanguage String    @default("fr")
+  timezone          String    @default("Africa/Kinshasa")
+  institutionId     String?   @db.Uuid
+  faculty           String?
+  // Préférences : disponibilité d'étude, notifications, heures calmes, etc.
+  settings          Json      @default("{}")
+  aiConsentAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  institution    Institution?          @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  refreshTokens  RefreshToken[]
+  resetTokens    PasswordResetToken[]
+  academicYears  AcademicYear[]
+  courses        Course[]
+  documents      Document[]
+  notes          Note[]
+  decks          FlashcardDeck[]
+  reviews        FlashcardReview[]
+  quizzes        Quiz[]
+  attempts       QuizAttempt[]
+  goals          StudyGoal[]
+  sessions       StudySession[]
+  summaries      Summary[]
+  notifications  Notification[]
+  aiUsage        AiUsage[]
+  aiFeedback     AiFeedback[]
+  chatThreads    ChatThread[]
+  auditLogs      AuditLog[]
+  syncOperations SyncOperation[]
+  tombstones     Tombstone[]
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique
+  familyId   String    @db.Uuid
+  clientType String    @default("web")
+  userAgent  String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?   @db.Uuid
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  event     String
+  ip        String?
+  userAgent String?
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([event, createdAt])
+}
+
+// ───────────────────────────── Organisation académique ─────────────────────────────
+
+model Institution {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  country   String   @default("CD")
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  users User[]
+
+  @@unique([name, country])
+}
+
+model AcademicYear {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  name      String
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  semesters Semester[]
+
+  @@index([userId])
+}
+
+model Semester {
+  id             String    @id @default(uuid()) @db.Uuid
+  academicYearId String    @db.Uuid
+  name           String
+  startDate      DateTime?
+  endDate        DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  courses      Course[]
+
+  @@index([academicYearId])
+}
+
+// Dossier de premier niveau (base de connaissances). Ressource API : /courses.
+model Course {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  semesterId     String?   @db.Uuid
+  title          String
+  code           String?
+  faculty        String?
+  description    String?
+  color          String?
+  // Importance relative (1–5) utilisée par le planificateur.
+  importance     Int       @default(3)
+  // Confiance déclarée par l'étudiant (1–5).
+  confidence     Int?
+  isDemo         Boolean   @default(false)
+  lastOpenedAt   DateTime?
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  semester  Semester?       @relation(fields: [semesterId], references: [id], onDelete: SetNull)
+  folders   Folder[]
+  lessons   Lesson[]
+  documents Document[]
+  notes     Note[]
+  decks     FlashcardDeck[]
+  quizzes   Quiz[]
+  goals     StudyGoal[]
+  sessions  StudySession[]
+  summaries Summary[]
+
+  @@index([userId, archivedAt])
+  @@index([semesterId])
+}
+
+model Folder {
+  id             String   @id @default(uuid()) @db.Uuid
+  courseId       String   @db.Uuid
+  parentFolderId String?  @db.Uuid
+  name           String
+  description    String?
+  color          String?
+  icon           String?
+  sortOrder      Int      @default(0)
+  archivedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  course    Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  parent    Folder?         @relation("FolderTree", fields: [parentFolderId], references: [id], onDelete: Cascade)
+  children  Folder[]        @relation("FolderTree")
+  lessons   Lesson[]
+  documents Document[]
+  notes     Note[]
+  decks     FlashcardDeck[]
+
+  @@index([courseId, parentFolderId, sortOrder])
+}
+
+enum LessonStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Lesson {
+  id                 String       @id @default(uuid()) @db.Uuid
+  courseId           String       @db.Uuid
+  folderId           String?      @db.Uuid
+  title              String
+  description        String?
+  content            String       @default("")
+  learningObjectives String[]     @default([])
+  definitions        Json         @default("[]")
+  formulas           Json         @default("[]")
+  examples           Json         @default("[]")
+  exercises          Json         @default("[]")
+  sortOrder          Int          @default(0)
+  status             LessonStatus @default(NOT_STARTED)
+  estimatedMinutes   Int?
+  revisionDate       DateTime?
+  completedAt        DateTime?
+  lastOpenedAt       DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  course    Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  folder    Folder?         @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  notes     Note[]
+  decks     FlashcardDeck[]
+  quizzes   Quiz[]
+  sessions  StudySession[]
+  summaries Summary[]
+
+  @@index([courseId, folderId, sortOrder])
+}
+
+// ───────────────────────────── Documents ─────────────────────────────
+
+enum ProcessingStatus {
+  PENDING_UPLOAD
+  UPLOADED
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Document {
+  id                String           @id @default(uuid()) @db.Uuid
+  userId            String           @db.Uuid
+  // Dossier de la base de connaissances (obligatoire) ; folderId = sous-dossier facultatif.
+  courseId          String           @db.Uuid
+  folderId          String?          @db.Uuid
+  fileName          String
+  mimeType          String
+  fileSize          Int
+  storageKey        String
+  processingStatus  ProcessingStatus @default(PENDING_UPLOAD)
+  processingError   String?
+  extractedTextKey  String?
+  extractionMethod  String?
+  // file | scan | text — mode d'ajout à la base de connaissances
+  source            String           @default("file")
+  pageCount         Int?
+  pinned            Boolean          @default(false)
+  isDemo            Boolean          @default(false)
+  lastOpenedAt      DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  user   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course                  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  folder Folder?                 @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  jobs   DocumentProcessingJob[]
+  chunks DocumentChunk[]
+  notes  Note[]
+
+  @@index([userId, courseId])
+  @@index([folderId])
+}
+
+// Passages extraits, utilisés pour la recherche et la génération augmentée (RAG).
+model DocumentChunk {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  userId     String   @db.Uuid
+  ordinal    Int
+  page       Int?
+  content    String
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([documentId, ordinal])
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model DocumentProcessingJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  documentId  String    @db.Uuid
+  jobType     String
+  status      JobStatus @default(QUEUED)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  runAfter    DateTime  @default(now())
+  errorCode   String?
+  errorDetail String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAfter])
+  @@index([documentId])
+}
+
+// ───────────────────────────── Notes ─────────────────────────────
+
+model Note {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  courseId   String?  @db.Uuid
+  folderId   String?  @db.Uuid
+  lessonId   String?  @db.Uuid
+  documentId String?  @db.Uuid
+  title      String
+  // Markdown (titres, listes, gras/italique, liens, maths $…$).
+  content    String   @default("")
+  isDemo     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course   Course?   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  folder   Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  lesson   Lesson?   @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, updatedAt])
+  @@index([courseId])
+  @@index([lessonId])
+}
+
+// ───────────────────────────── Révision intelligente ─────────────────────────────
+
+// Contenu généré par l'IA avec sa provenance (documents et pages sources).
+model Summary {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  courseId   String?  @db.Uuid
+  lessonId   String?  @db.Uuid
+  title      String
+  length     String
+  content    Json
+  sources    Json     @default("[]")
+  provider   String
+  model      String
+  createdAt  DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+model FlashcardDeck {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  courseId  String?  @db.Uuid
+  folderId  String?  @db.Uuid
+  lessonId  String?  @db.Uuid
+  title     String
+  origin    String   @default("manual")
+  provider  String?
+  sources   Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course?     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  folder Folder?     @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  lesson Lesson?     @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  cards  Flashcard[]
+
+  @@index([userId])
+  @@index([courseId])
+}
+
+model Flashcard {
+  id              String    @id @default(uuid()) @db.Uuid
+  deckId          String    @db.Uuid
+  question        String
+  answer          String
+  sourceReference Json?
+  difficulty      Int?
+  tags            String[]  @default([])
+  // État de répétition espacée (SM-2 adapté).
+  easeFactor      Float     @default(2.5)
+  intervalDays    Float     @default(0)
+  repetitions     Int       @default(0)
+  lapses          Int       @default(0)
+  dueAt           DateTime  @default(now())
+  lastReviewedAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  deck    FlashcardDeck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  reviews FlashcardReview[]
+
+  @@index([deckId, dueAt])
+}
+
+model FlashcardReview {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  flashcardId    String   @db.Uuid
+  // 0 = à revoir, 1 = difficile, 2 = compris, 3 = facile
+  responseRating Int
+  reviewedAt     DateTime @default(now())
+  nextReviewAt   DateTime
+  intervalDays   Float
+  clientOpId     String?  @unique
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcard Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+
+  @@index([userId, reviewedAt])
+  @@index([flashcardId])
+}
+
+model Quiz {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  courseId      String?  @db.Uuid
+  lessonId      String?  @db.Uuid
+  title         String
+  // { mode: practice|exam, timed, durationMinutes, difficulty, questionTypes, isMockExam }
+  configuration Json     @default("{}")
+  origin        String   @default("ai")
+  provider      String?
+  sources       Json     @default("[]")
+  createdAt     DateTime @default(now())
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    Course?        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson    Lesson?        @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@index([userId, createdAt])
+  @@index([courseId])
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+  FILL_BLANK
+  MATCHING
+}
+
+model QuizQuestion {
+  id              String       @id @default(uuid()) @db.Uuid
+  quizId          String       @db.Uuid
+  ordinal         Int
+  question        String
+  questionType    QuestionType
+  options         Json         @default("[]")
+  correctAnswer   Json
+  explanation     String?
+  sourceReference Json?
+  difficulty      String?
+  topic           String?
+  points          Float        @default(1)
+  // Signalé comme potentiellement ambigu par le générateur ou le validateur.
+  uncertain       Boolean      @default(false)
+
+  quiz      Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  responses QuizResponse[]
+
+  @@index([quizId, ordinal])
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
+}
+
+model QuizAttempt {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String        @db.Uuid
+  quizId      String        @db.Uuid
+  mode        String        @default("practice")
+  startedAt   DateTime      @default(now())
+  deadlineAt  DateTime?
+  completedAt DateTime?
+  score       Float?
+  maxScore    Float?
+  status      AttemptStatus @default(IN_PROGRESS)
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz      Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  responses QuizResponse[]
+
+  @@index([userId, startedAt])
+  @@index([quizId])
+}
+
+model QuizResponse {
+  id         String   @id @default(uuid()) @db.Uuid
+  attemptId  String   @db.Uuid
+  questionId String   @db.Uuid
+  response   Json
+  isCorrect  Boolean?
+  needsReview Boolean @default(false)
+  answeredAt DateTime @default(now())
+
+  attempt  QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+}
+
+// ───────────────────────────── Coach ─────────────────────────────
+
+model StudyGoal {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  courseId   String?   @db.Uuid
+  // exam | goal
+  kind       String    @default("exam")
+  title      String
+  targetDate DateTime?
+  targetGrade String?
+  status     String    @default("active")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([userId, targetDate])
+}
+
+enum SessionStatus {
+  PLANNED
+  COMPLETED
+  SKIPPED
+  MISSED
+}
+
+model StudySession {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @db.Uuid
+  courseId       String        @db.Uuid
+  lessonId       String?       @db.Uuid
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  // lesson | flashcards | quiz | mock_exam | summary | free
+  activityType   String
+  objective      String?
+  reason         String?
+  // manual | plan
+  origin         String        @default("manual")
+  status         SessionStatus @default(PLANNED)
+  completedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
+  @@index([userId, scheduledStart])
+  @@index([courseId])
+}
+
+model ChatThread {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  title     String
+  // { scope: general|lesson|folder|course|documents, id?, documentIds? }
+  context   Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  threadId  String   @db.Uuid
+  role      String
+  content   String
+  citations Json     @default("[]")
+  grounded  Boolean  @default(false)
+  provider  String?
+  createdAt DateTime @default(now())
+
+  thread ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
+
+// ───────────────────────────── Notifications, IA, synchronisation ─────────────────────────────
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  type      String
+  title     String
+  body      String
+  link      String?
+  dedupeKey String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt, createdAt])
+}
+
+model AiUsage {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  task         String
+  provider     String
+  model        String
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  costUsd      Float    @default(0)
+  latencyMs    Int      @default(0)
+  success      Boolean  @default(true)
+  errorCode    String?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model AiFeedback {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  targetType String
+  targetId   String
+  reason     String
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, targetId])
+}
+
+// Opérations hors ligne déjà appliquées (idempotence).
+model SyncOperation {
+  id         String   @id @db.Uuid
+  userId     String   @db.Uuid
+  entity     String
+  action     String
+  result     Json     @default("{}")
+  appliedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, appliedAt])
+}
+
+// Traces de suppression pour la synchronisation incrémentale.
+model Tombstone {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  entity    String
+  entityId  String   @db.Uuid
+  deletedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, deletedAt])
+}

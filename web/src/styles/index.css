@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-ivory font-sans text-[15px] leading-relaxed text-charcoal antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-serif text-charcoal;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-crimson/60 ring-offset-2 ring-offset-ivory;
+  }
+  ::selection {
+    @apply bg-crimson/15;
+  }
+}
+
+@layer components {
+  .page {
+    @apply mx-auto w-full max-w-content px-4 pb-28 pt-6 md:px-8 md:pb-12 md:pt-8;
+  }
+  .page-title {
+    @apply font-serif text-[26px] font-semibold leading-tight md:text-[34px];
+  }
+  .section-title {
+    @apply font-serif text-xl font-semibold md:text-[22px];
+  }
+  .card {
+    @apply rounded-lg border border-line bg-white shadow-card;
+  }
+  .meta {
+    @apply text-[13px] text-muted;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-charcoal;
+  }
+  .field {
+    @apply block w-full rounded-md border border-line bg-white px-3 py-2 text-[15px] text-charcoal placeholder:text-muted/70 focus:border-crimson focus:outline-none focus:ring-2 focus:ring-crimson/20 disabled:bg-ivory;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-line bg-white px-2.5 py-0.5 text-xs font-medium text-muted;
+  }
+  .markdown {
+    @apply prose prose-sm max-w-none prose-headings:font-serif prose-headings:text-charcoal prose-a:text-crimson prose-strong:text-charcoal prose-code:before:content-none prose-code:after:content-none md:prose-base;
+  }
+}
+
+.katex {
+  font-size: 1.05em;
+}
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

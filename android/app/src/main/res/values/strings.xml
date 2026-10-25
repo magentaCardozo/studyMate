@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">StudyMate AI</string>
+    <string name="nav_home">Accueil</string>
+    <string name="nav_courses">Dossiers</string>
+    <string name="nav_revision">Révisions</string>
+    <string name="nav_coach">Mon coach</string>
+    <string name="nav_profile">Profil</string>
+    <string name="tagline">Organisez votre savoir. Comprenez vos cours. Préparez-vous avec confiance.</string>
+    <string name="offline_banner">Hors connexion — vos modifications seront synchronisées au retour du réseau.</string>
+    <string name="retry">Réessayer</string>
+    <string name="cancel">Annuler</string>
+    <string name="save">Enregistrer</string>
+    <string name="delete">Supprimer</string>
+</resources>

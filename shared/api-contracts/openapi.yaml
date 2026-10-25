@@ -1,0 +1,672 @@
+openapi: 3.1.0
+info:
+  title: StudyMate AI — API REST
+  version: 1.0.0
+  description: |
+    Contrat partagé par le client web (React) et l'application Android (Kotlin).
+
+    **Authentification**
+    - Web : cookies HttpOnly `sm_access` / `sm_refresh` (SameSite=Strict). Les requêtes modifiantes
+      authentifiées par cookie doivent envoyer l'en-tête `X-Requested-With: StudyMate`.
+    - Android : envoyer `X-Client: android` à la connexion ; les jetons sont renvoyés dans le corps.
+      Utiliser `Authorization: Bearer <accessToken>` ; rafraîchir via `POST /auth/refresh` avec `{ refreshToken }`.
+      Les jetons de rafraîchissement sont à usage unique (rotation) ; une réutilisation révoque la session.
+
+    **Format des réponses** : `{ "data": …, "meta"?: { page, pageSize, total, totalPages } }`.
+    **Format des erreurs** : `{ "error": { "code": "…", "message": "…", "details"?: … } }`.
+    Une ressource appartenant à un autre utilisateur renvoie **404**.
+
+    **Pagination** : `?page=1&pageSize=20` (max 100) sur les collections volumineuses.
+servers:
+  - url: /api/v1
+security:
+  - bearer: []
+  - cookie: []
+tags:
+  - { name: Auth }
+  - { name: Utilisateur }
+  - { name: Organisation académique }
+  - { name: Matières, description: 'Dossiers de premier niveau (bases de connaissances) — ressource /courses.' }
+  - { name: Dossiers }
+  - { name: Leçons }
+  - { name: Documents }
+  - { name: Notes }
+  - { name: IA et révision }
+  - { name: Cartes mémoire }
+  - { name: Quiz }
+  - { name: Coach }
+  - { name: Progression }
+  - { name: Recherche et notifications }
+  - { name: Synchronisation }
+
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+    cookie: { type: apiKey, in: cookie, name: sm_access }
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    CourseId: { name: courseId, in: path, required: true, schema: { type: string, format: uuid } }
+    Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    PageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+  responses:
+    Error:
+      description: Erreur
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NoContent: { description: Succès sans contenu }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, examples: [VALIDATION_ERROR, NOT_FOUND, UNAUTHORIZED, TOKEN_EXPIRED, RATE_LIMITED, AI_CONSENT_REQUIRED, INSUFFICIENT_CONTENT] }
+            message: { type: string }
+            details: {}
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        preferredLanguage: { type: string, enum: [fr, en] }
+        timezone: { type: string }
+        faculty: { type: [string, 'null'] }
+        settings: { type: object }
+        aiConsentAt: { type: [string, 'null'], format: date-time }
+    Session:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        accessToken: { type: string, description: Android uniquement }
+        refreshToken: { type: string, description: Android uniquement }
+        accessExpiresIn: { type: integer }
+    Course:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        code: { type: [string, 'null'] }
+        faculty: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        color: { type: [string, 'null'] }
+        importance: { type: integer, minimum: 1, maximum: 5 }
+        confidence: { type: [integer, 'null'] }
+        isDemo: { type: boolean }
+        archivedAt: { type: [string, 'null'], format: date-time }
+        semester: { type: [object, 'null'] }
+        academicYear: { type: [object, 'null'] }
+        stats:
+          type: object
+          properties:
+            folders: { type: integer }
+            lessons: { type: integer }
+            documents: { type: integer }
+            completedLessons: { type: integer }
+            progress: { type: [integer, 'null'], description: Null tant qu'aucune leçon n'existe }
+        lastActivityAt: { type: [string, 'null'], format: date-time }
+    CourseInput:
+      type: object
+      required: [title]
+      properties:
+        id: { type: string, format: uuid, description: Identifiant généré par le client (optionnel) }
+        title: { type: string, maxLength: 160 }
+        code: { type: string }
+        faculty: { type: string }
+        description: { type: string }
+        color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+        semesterId: { type: string, format: uuid }
+        importance: { type: integer }
+        confidence: { type: integer }
+    TreeFolder:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        parentFolderId: { type: [string, 'null'] }
+        counts: { type: object, properties: { lessons: { type: integer }, documents: { type: integer }, subfolders: { type: integer } } }
+        children: { type: array, items: { $ref: '#/components/schemas/TreeFolder' } }
+        lessons: { type: array, items: { type: object } }
+    Folder:
+      type: object
+      properties:
+        id: { type: string }
+        courseId: { type: string }
+        parentFolderId: { type: [string, 'null'] }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        sortOrder: { type: integer }
+    Lesson:
+      type: object
+      properties:
+        id: { type: string }
+        courseId: { type: string }
+        folderId: { type: [string, 'null'] }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        content: { type: string, description: Markdown avec mathématiques ($…$) }
+        learningObjectives: { type: array, items: { type: string } }
+        definitions: { type: array, items: { $ref: '#/components/schemas/Item' } }
+        formulas: { type: array, items: { $ref: '#/components/schemas/Item' } }
+        examples: { type: array, items: { $ref: '#/components/schemas/Item' } }
+        exercises: { type: array, items: { $ref: '#/components/schemas/Item' } }
+        status: { type: string, enum: [NOT_STARTED, IN_PROGRESS, COMPLETED] }
+        estimatedMinutes: { type: [integer, 'null'] }
+        revisionDate: { type: [string, 'null'], format: date-time }
+    Item: { type: object, properties: { title: { type: string }, body: { type: string } } }
+    Document:
+      type: object
+      properties:
+        id: { type: string }
+        fileName: { type: string }
+        mimeType: { type: string }
+        fileSize: { type: integer }
+        courseId: { type: string, description: Dossier de la base de connaissances (obligatoire) }
+        folderId: { type: [string, 'null'], description: Sous-dossier facultatif }
+        source: { type: string, enum: [file, scan, text], description: 'Mode d''ajout : fichier (PDF…), scan, texte collé' }
+        processingStatus: { type: string, enum: [PENDING_UPLOAD, UPLOADED, QUEUED, PROCESSING, READY, FAILED] }
+        processingError: { type: [string, 'null'] }
+        extractionMethod: { type: [string, 'null'], enum: [pdf-text, pdf-ocr, docx, text, image-ocr, null] }
+        pageCount: { type: [integer, 'null'] }
+        pinned: { type: boolean }
+    Note:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        content: { type: string, description: Markdown }
+        courseId: { type: [string, 'null'] }
+        folderId: { type: [string, 'null'] }
+        lessonId: { type: [string, 'null'] }
+        documentId: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+    SourceRef:
+      type: object
+      description: Provenance d'un contenu généré. `page` est null quand l'extraction ne fournit pas de pagination fiable.
+      properties:
+        sourceId: { type: string }
+        kind: { type: string, enum: [document, lesson] }
+        documentId: { type: [string, 'null'] }
+        lessonId: { type: [string, 'null'] }
+        title: { type: string }
+        page: { type: [integer, 'null'] }
+    Scope:
+      type: object
+      description: Portée des sources (au moins un champ).
+      properties:
+        courseId: { type: string, format: uuid }
+        folderId: { type: string, format: uuid }
+        lessonId: { type: string, format: uuid }
+        documentIds: { type: array, items: { type: string, format: uuid }, maxItems: 20 }
+    Flashcard:
+      type: object
+      properties:
+        id: { type: string }
+        deckId: { type: string }
+        question: { type: string }
+        answer: { type: string }
+        sourceReference: { oneOf: [{ $ref: '#/components/schemas/SourceRef' }, { type: 'null' }] }
+        difficulty: { type: [integer, 'null'] }
+        tags: { type: array, items: { type: string } }
+        easeFactor: { type: number }
+        intervalDays: { type: number }
+        repetitions: { type: integer }
+        dueAt: { type: string, format: date-time }
+    Question:
+      type: object
+      description: |
+        Formats de `correctAnswer` / réponse : SINGLE_CHOICE → index ; MULTIPLE_CHOICE → index[] ;
+        TRUE_FALSE → booléen ; SHORT_ANSWER / FILL_BLANK → chaînes acceptées / chaîne ;
+        MATCHING → `options = {left, right}`, réponse = index de droite pour chaque élément de gauche.
+        `correctAnswer` et `explanation` sont absents tant qu'une tentative en mode examen n'est pas soumise.
+      properties:
+        id: { type: string }
+        ordinal: { type: integer }
+        question: { type: string }
+        questionType: { type: string, enum: [SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER, FILL_BLANK, MATCHING] }
+        options: {}
+        points: { type: number }
+        correctAnswer: {}
+        explanation: { type: string }
+        uncertain: { type: boolean }
+        sourceReference: {}
+    StudySession:
+      type: object
+      properties:
+        id: { type: string }
+        courseId: { type: string }
+        lessonId: { type: [string, 'null'] }
+        scheduledStart: { type: string, format: date-time }
+        scheduledEnd: { type: string, format: date-time }
+        activityType: { type: string, enum: [lesson, flashcards, quiz, mock_exam, summary, free] }
+        objective: { type: [string, 'null'] }
+        reason: { type: [string, 'null'], description: Explication de la recommandation }
+        origin: { type: string, enum: [manual, plan] }
+        status: { type: string, enum: [PLANNED, COMPLETED, SKIPPED, MISSED] }
+    SyncOperation:
+      type: object
+      required: [opId, entity, action, id]
+      properties:
+        opId: { type: string, format: uuid, description: Clé d'idempotence }
+        entity: { type: string, enum: [note, lesson, course, folder, flashcard, flashcard_review, session] }
+        action: { type: string, enum: [create, update, delete] }
+        id: { type: string, format: uuid }
+        data: { type: object }
+        baseUpdatedAt: { type: [string, 'null'], format: date-time, description: Version serveur connue lors de la modification locale }
+        clientTime: { type: string, format: date-time }
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Créer un compte
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8, description: Au moins une lettre et un chiffre }
+                preferredLanguage: { type: string, enum: [fr, en] }
+                timezone: { type: string }
+      responses:
+        '201': { description: 'Compte créé', content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Session' } } } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Se connecter
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [email, password], properties: { email: { type: string }, password: { type: string } } } } } }
+      responses:
+        '200': { description: 'Connecté', content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Session' } } } } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Rafraîchir la session (rotation du jeton)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { refreshToken: { type: string, description: Android uniquement ; le web utilise le cookie } } } } } }
+      responses:
+        '200': { description: Nouveaux jetons }
+        '401': { $ref: '#/components/responses/Error' }
+  /auth/logout:
+    post: { tags: [Auth], security: [], summary: 'Se déconnecter (révocation du jeton de rafraîchissement)', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /auth/logout-all:
+    post: { tags: [Auth], summary: 'Déconnecter tous les appareils', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /auth/password-reset/request:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Demander un lien de réinitialisation (réponse identique que le compte existe ou non)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { email: { type: string } } } } } }
+      responses: { '202': { description: Accepté } }
+  /auth/password-reset/confirm:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Définir un nouveau mot de passe
+      requestBody: { content: { application/json: { schema: { type: object, properties: { token: { type: string }, password: { type: string } } } } } }
+      responses: { '200': { description: Mot de passe mis à jour }, '400': { $ref: '#/components/responses/Error' } }
+
+  /users/me:
+    get: { tags: [Utilisateur], summary: 'Profil', responses: { '200': { description: Profil } } }
+    patch: { tags: [Utilisateur], summary: 'Modifier le profil (nom, langue, fuseau, faculté, établissement)', responses: { '200': { description: Profil } } }
+    delete:
+      tags: [Utilisateur]
+      summary: Supprimer définitivement le compte et tous les documents
+      requestBody: { content: { application/json: { schema: { type: object, properties: { password: { type: string } } } } } }
+      responses: { '204': { $ref: '#/components/responses/NoContent' } }
+  /users/me/settings:
+    patch: { tags: [Utilisateur], summary: 'Préférences (disponibilités, durée de session, notifications, heures calmes, hors ligne)', responses: { '200': { description: OK } } }
+  /users/me/ai-consent:
+    post: { tags: [Utilisateur], summary: 'Accorder ou retirer le consentement au traitement par un fournisseur d''IA tiers', responses: { '200': { description: OK } } }
+  /users/me/export:
+    get: { tags: [Utilisateur], summary: 'Exporter toutes ses données (JSON)', responses: { '200': { description: Export } } }
+  /users/me/demo-content:
+    post: { tags: [Utilisateur], summary: 'Ajouter le contenu de démonstration (marqué « démo »)', responses: { '201': { description: Créé } } }
+    delete: { tags: [Utilisateur], summary: 'Supprimer le contenu de démonstration', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+
+  /academic-years:
+    get: { tags: [Organisation académique], summary: 'Années académiques et semestres', responses: { '200': { description: Liste } } }
+    post: { tags: [Organisation académique], summary: 'Créer une année (option semesters[])', responses: { '201': { description: Créée } } }
+  /academic-years/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    patch: { tags: [Organisation académique], summary: 'Modifier', responses: { '200': { description: OK } } }
+    delete: { tags: [Organisation académique], summary: 'Supprimer', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /semesters:
+    get: { tags: [Organisation académique], summary: 'Semestres (?academicYearId=)', responses: { '200': { description: Liste } } }
+    post: { tags: [Organisation académique], summary: 'Créer un semestre', responses: { '201': { description: Créé } } }
+  /semesters/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    patch: { tags: [Organisation académique], summary: 'Modifier', responses: { '200': { description: OK } } }
+    delete: { tags: [Organisation académique], summary: 'Supprimer', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+
+  /courses:
+    get:
+      tags: [Matières]
+      summary: Lister les matières
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: semesterId, in: query, schema: { type: string, format: uuid } }
+        - { name: academicYearId, in: query, schema: { type: string, format: uuid } }
+        - { name: archived, in: query, schema: { type: string, enum: ['true', 'false', all], default: 'false' } }
+        - { name: sort, in: query, schema: { type: string, enum: [alpha, recent], default: recent } }
+      responses: { '200': { description: 'Liste paginée', content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Course' } }, meta: { type: object } } } } } } }
+    post:
+      tags: [Matières]
+      summary: Créer une matière
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CourseInput' } } } }
+      responses: { '201': { description: Créée }, '400': { $ref: '#/components/responses/Error' } }
+  /courses/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Matières], summary: 'Détail avec arborescence (tree) générée depuis la base', responses: { '200': { description: Matière }, '404': { $ref: '#/components/responses/Error' } } }
+    patch: { tags: [Matières], summary: 'Modifier / archiver ({ archived: true })', responses: { '200': { description: OK } } }
+    delete: { tags: [Matières], summary: 'Supprimer (documents compris)', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /courses/{id}/knowledge-base:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Matières]
+      summary: 'État de la base de connaissances du dossier (documents par source et par état, volume de texte, canGenerate)'
+      responses: { '200': { description: OK } }
+  /courses/{id}/tree:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Matières], summary: 'Arborescence dossiers / leçons', responses: { '200': { description: 'Arbre', content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { folders: { type: array, items: { $ref: '#/components/schemas/TreeFolder' } }, lessons: { type: array, items: { type: object } } } } } } } } } } }
+
+  /courses/{courseId}/folders:
+    parameters: [{ $ref: '#/components/parameters/CourseId' }]
+    get: { tags: [Dossiers], summary: 'Dossiers de la matière (liste à plat)', responses: { '200': { description: Liste } } }
+    post:
+      tags: [Dossiers]
+      summary: Créer un dossier (parentFolderId pour un sous-dossier)
+      requestBody: { content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string }, description: { type: string }, parentFolderId: { type: string }, color: { type: string } } } } } }
+      responses: { '201': { description: Créé } }
+  /courses/{courseId}/folders/reorder:
+    parameters: [{ $ref: '#/components/parameters/CourseId' }]
+    post: { tags: [Dossiers], summary: 'Réordonner des dossiers de même niveau', requestBody: { content: { application/json: { schema: { type: object, properties: { folderIds: { type: array, items: { type: string } } } } } } }, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /folders/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Dossiers], summary: 'Contenu du dossier (sous-dossiers, leçons, documents, notes, fil d’Ariane ; ?q= pour filtrer)', responses: { '200': { description: Dossier } } }
+    patch: { tags: [Dossiers], summary: 'Renommer / déplacer (parentFolderId) / réordonner / archiver', responses: { '200': { description: OK }, '400': { $ref: '#/components/responses/Error' } } }
+    delete: { tags: [Dossiers], summary: 'Supprimer (sous-dossiers et leçons ; documents conservés)', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /folders/{id}/duplicate:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post: { tags: [Dossiers], summary: 'Dupliquer la structure (sans contenu)', responses: { '201': { description: Copie } } }
+
+  /courses/{courseId}/lessons:
+    parameters: [{ $ref: '#/components/parameters/CourseId' }]
+    get: { tags: [Leçons], summary: 'Leçons (?folderId=&status=)', responses: { '200': { description: Liste } } }
+    post: { tags: [Leçons], summary: 'Créer une leçon', requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/Lesson' } } } }, responses: { '201': { description: Créée } } }
+  /courses/{courseId}/lessons/reorder:
+    parameters: [{ $ref: '#/components/parameters/CourseId' }]
+    post: { tags: [Leçons], summary: 'Réordonner', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /lessons/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Leçons], summary: 'Leçon avec notes, cartes, quiz, résumés', responses: { '200': { description: Leçon } } }
+    patch: { tags: [Leçons], summary: 'Modifier / déplacer (folderId) / statut', responses: { '200': { description: OK } } }
+    delete: { tags: [Leçons], summary: 'Supprimer', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /lessons/{id}/complete:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post: { tags: [Leçons], summary: 'Marquer terminée ({ completed: false } pour annuler)', responses: { '200': { description: OK } } }
+
+  /documents:
+    get:
+      tags: [Documents]
+      summary: 'Lister (filtres courseId, folderId, q)'
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }]
+      responses: { '200': { description: Liste paginée } }
+  /documents/allowed-types:
+    get: { tags: [Documents], summary: 'Types et taille acceptés', responses: { '200': { description: OK } } }
+  /documents/upload-url:
+    post:
+      tags: [Documents]
+      summary: '1. Demander une URL d’import signée (15 min)'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, mimeType, fileSize]
+              description: courseId (dossier) ou folderId (sous-dossier) obligatoire — sinon 400 FOLDER_REQUIRED.
+              properties:
+                fileName: { type: string }
+                mimeType: { type: string }
+                fileSize: { type: integer }
+                courseId: { type: string }
+                folderId: { type: string }
+                source: { type: string, enum: [file, scan], default: file }
+      responses:
+        '201': { description: '{ document, upload: { method: PUT, url, headers, expiresAt } }' }
+        '400': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+  /documents/text:
+    post:
+      tags: [Documents]
+      summary: Ajouter du texte copié-collé à la base de connaissances d'un dossier
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content]
+              properties:
+                title: { type: string, maxLength: 200 }
+                content: { type: string, maxLength: 500000 }
+                courseId: { type: string, description: Dossier (ou folderId) }
+                folderId: { type: string }
+      responses:
+        '201': { description: 'Document texte créé (source = text), traitement lancé' }
+        '400': { $ref: '#/components/responses/Error' }
+  /uploads/{token}:
+    put:
+      tags: [Documents]
+      security: []
+      summary: '2. Envoyer le fichier (corps binaire). La signature binaire est vérifiée.'
+      parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+      requestBody: { content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+      responses: { '204': { $ref: '#/components/responses/NoContent' }, '400': { $ref: '#/components/responses/Error' }, '403': { $ref: '#/components/responses/Error' } }
+  /documents/{id}/confirm-upload:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post: { tags: [Documents], summary: '3. Confirmer l’import et lancer le traitement asynchrone', responses: { '200': { description: Document (QUEUED) } } }
+  /documents/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Documents], summary: 'Détail', responses: { '200': { description: Document } } }
+    patch: { tags: [Documents], summary: 'Renommer / déplacer / épingler', responses: { '200': { description: OK } } }
+    delete: { tags: [Documents], summary: 'Supprimer (fichier compris)', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /documents/{id}/status:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Documents], summary: 'État du traitement', responses: { '200': { description: OK } } }
+  /documents/{id}/download-url:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post: { tags: [Documents], summary: 'URL de téléchargement signée (5 min ; { inline: true } pour l’aperçu)', responses: { '200': { description: '{ url, expiresAt }' } } }
+  /files/{token}:
+    get: { tags: [Documents], security: [], summary: 'Télécharger via URL signée', parameters: [{ name: token, in: path, required: true, schema: { type: string } }], responses: { '200': { description: Fichier }, '403': { $ref: '#/components/responses/Error' } } }
+  /documents/{id}/text:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Documents], summary: 'Texte extrait par page', responses: { '200': { description: OK } } }
+    put: { tags: [Documents], summary: 'Corriger le texte extrait (OCR)', responses: { '200': { description: OK } } }
+  /documents/{id}/reprocess:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post: { tags: [Documents], summary: 'Relancer l’extraction / OCR', responses: { '202': { description: Accepté } } }
+
+  /notes:
+    get: { tags: [Notes], summary: 'Lister (filtres courseId, folderId, lessonId, documentId, q)', responses: { '200': { description: Liste } } }
+    post: { tags: [Notes], summary: 'Créer', requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/Note' } } } }, responses: { '201': { description: Créée } } }
+  /notes/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Notes], summary: 'Lire', responses: { '200': { description: Note } } }
+    patch: { tags: [Notes], summary: 'Modifier (baseUpdatedAt → 409 si modifiée ailleurs)', responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Error' } } }
+    delete: { tags: [Notes], summary: 'Supprimer', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+
+  /ai/status:
+    get: { tags: [IA et révision], summary: 'Fournisseur configuré, mode démo, consentement, quota', responses: { '200': { description: OK } } }
+  /ai/summaries:
+    post:
+      tags: [IA et révision]
+      summary: Générer un résumé structuré fondé sur les sources
+      requestBody: { content: { application/json: { schema: { allOf: [{ $ref: '#/components/schemas/Scope' }, { type: object, properties: { length: { type: string, enum: [brief, standard, detailed] } } }] } } } }
+      responses: { '201': { description: Résumé enregistré avec provenance }, '400': { $ref: '#/components/responses/Error' }, '403': { $ref: '#/components/responses/Error' }, '429': { $ref: '#/components/responses/Error' }, '503': { $ref: '#/components/responses/Error' } }
+  /ai/flashcards:
+    post:
+      tags: [IA et révision]
+      summary: Générer un paquet de cartes
+      requestBody: { content: { application/json: { schema: { allOf: [{ $ref: '#/components/schemas/Scope' }, { type: object, properties: { count: { type: integer, minimum: 3, maximum: 40 }, deckTitle: { type: string } } }] } } } }
+      responses: { '201': { description: Paquet créé } }
+  /ai/quizzes:
+    post:
+      tags: [IA et révision]
+      summary: Générer un quiz ou un examen blanc (clés de correction validées)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/Scope' }
+                - type: object
+                  properties:
+                    count: { type: integer }
+                    difficulty: { type: string, enum: [easy, medium, hard, mixed] }
+                    types: { type: array, items: { type: string } }
+                    topics: { type: array, items: { type: string } }
+                    mode: { type: string, enum: [practice, exam] }
+                    timed: { type: boolean }
+                    durationMinutes: { type: integer }
+                    isMockExam: { type: boolean }
+      responses: { '201': { description: Quiz créé } }
+  /ai/ask:
+    post:
+      tags: [IA et révision]
+      summary: Poser une question au tuteur (RAG sur les sources autorisées)
+      requestBody: { content: { application/json: { schema: { type: object, required: [question], properties: { question: { type: string }, threadId: { type: string }, context: { $ref: '#/components/schemas/Scope' } } } } } }
+      responses: { '201': { description: 'Réponse avec citations vérifiées' } }
+  /ai/threads:
+    get: { tags: [IA et révision], summary: 'Conversations', responses: { '200': { description: Liste } } }
+  /ai/threads/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [IA et révision], summary: 'Messages', responses: { '200': { description: Conversation } } }
+    delete: { tags: [IA et révision], summary: 'Supprimer', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /ai/feedback:
+    post: { tags: [IA et révision], summary: 'Signaler un contenu généré incorrect', responses: { '201': { description: Enregistré } } }
+  /summaries:
+    get: { tags: [IA et révision], summary: 'Résumés enregistrés', responses: { '200': { description: Liste } } }
+  /summaries/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [IA et révision], summary: 'Résumé', responses: { '200': { description: Résumé } } }
+    delete: { tags: [IA et révision], summary: 'Supprimer', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+
+  /flashcards/decks:
+    get: { tags: [Cartes mémoire], summary: 'Paquets avec compteurs (total, dues, nouvelles)', responses: { '200': { description: Liste } } }
+    post: { tags: [Cartes mémoire], summary: 'Créer un paquet (option cards[])', responses: { '201': { description: Créé } } }
+  /flashcards/decks/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Cartes mémoire], summary: 'Paquet et cartes', responses: { '200': { description: OK } } }
+    patch: { tags: [Cartes mémoire], summary: 'Renommer', responses: { '200': { description: OK } } }
+    delete: { tags: [Cartes mémoire], summary: 'Supprimer', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /flashcards/decks/{id}/cards:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post: { tags: [Cartes mémoire], summary: 'Ajouter une carte', responses: { '201': { description: Créée } } }
+  /flashcards/cards/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    patch: { tags: [Cartes mémoire], summary: 'Modifier', responses: { '200': { description: OK } } }
+    delete: { tags: [Cartes mémoire], summary: 'Supprimer', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /flashcards/study:
+    get: { tags: [Cartes mémoire], summary: 'Cartes à étudier (deckId, courseId, mode=due|all|difficult, tag, shuffle)', responses: { '200': { description: Cartes } } }
+  /flashcards/cards/{id}/review:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post:
+      tags: [Cartes mémoire]
+      summary: 'Enregistrer une réponse (0 à revoir, 1 difficile, 2 compris, 3 facile) — répétition espacée'
+      requestBody: { content: { application/json: { schema: { type: object, required: [rating], properties: { rating: { type: integer, enum: [0, 1, 2, 3] }, clientOpId: { type: string, format: uuid }, reviewedAt: { type: string, format: date-time } } } } } }
+      responses: { '200': { description: Carte replanifiée } }
+  /flashcards/cards/{id}/reviews:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Cartes mémoire], summary: 'Historique des révisions', responses: { '200': { description: Liste } } }
+
+  /quizzes:
+    get: { tags: [Quiz], summary: 'Quiz (courseId, lessonId, mockExam)', responses: { '200': { description: Liste } } }
+    post: { tags: [Quiz], summary: 'Créer un quiz manuellement', responses: { '201': { description: Créé } } }
+  /quizzes/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Quiz], summary: 'Quiz (?withAnswers=true refusé pendant un examen en cours)', responses: { '200': { description: OK } } }
+    delete: { tags: [Quiz], summary: 'Supprimer', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /quizzes/{id}/attempts:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post: { tags: [Quiz], summary: 'Démarrer ou reprendre une tentative', responses: { '201': { description: Tentative }, '200': { description: Tentative reprise } } }
+  /quiz-attempts:
+    get: { tags: [Quiz], summary: 'Historique', responses: { '200': { description: Liste } } }
+  /quiz-attempts/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Quiz], summary: 'Tentative et questions (sans réponses en mode examen)', responses: { '200': { description: OK } } }
+  /quiz-attempts/{id}/responses:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post: { tags: [Quiz], summary: 'Enregistrer une réponse (correction immédiate en mode entraînement)', responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Error' } } }
+  /quiz-attempts/{id}/submit:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post: { tags: [Quiz], summary: 'Soumettre et obtenir les résultats', responses: { '200': { description: Résultats } } }
+  /quiz-attempts/{id}/results:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Quiz], summary: 'Résultats (score, corrections, explications, sources, leçons à revoir)', responses: { '200': { description: OK } } }
+
+  /goals:
+    get: { tags: [Coach], summary: 'Objectifs et examens (?upcoming=true)', responses: { '200': { description: Liste } } }
+    post: { tags: [Coach], summary: 'Créer (kind=exam exige targetDate)', responses: { '201': { description: Créé } } }
+  /goals/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    patch: { tags: [Coach], summary: 'Modifier', responses: { '200': { description: OK } } }
+    delete: { tags: [Coach], summary: 'Supprimer', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /study-sessions:
+    get: { tags: [Coach], summary: 'Sessions (from, to, status, courseId)', responses: { '200': { description: 'Liste', content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/StudySession' } } } } } } } } }
+    post: { tags: [Coach], summary: 'Créer une session manuelle', responses: { '201': { description: Créée } } }
+  /study-sessions/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    patch: { tags: [Coach], summary: 'Replanifier / terminer / passer', responses: { '200': { description: OK } } }
+    delete: { tags: [Coach], summary: 'Supprimer', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /study-plans/generate:
+    post:
+      tags: [Coach]
+      summary: Générer un programme (aperçu par défaut ; preview=false pour l’accepter)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { courseIds: { type: array, items: { type: string } }, preview: { type: boolean, default: true }, horizonDays: { type: integer } } } } } }
+      responses: { '200': { description: Aperçu }, '201': { description: Programme enregistré } }
+  /calendar:
+    get: { tags: [Coach], summary: 'Sessions, examens et dates de révision (from, to)', responses: { '200': { description: OK } } }
+
+  /dashboard:
+    get: { tags: [Progression], summary: 'Données du tableau de bord', responses: { '200': { description: OK } } }
+  /progress/overview:
+    get: { tags: [Progression], summary: 'Indicateurs globaux (activités réelles)', responses: { '200': { description: OK } } }
+  /progress/courses:
+    get: { tags: [Progression], summary: 'Statistiques par matière', responses: { '200': { description: OK } } }
+  /progress/courses/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get: { tags: [Progression], summary: 'Tendance des quiz, notions manquées, leçons à revoir', responses: { '200': { description: OK } } }
+  /progress/history:
+    get: { tags: [Progression], summary: 'Historique quotidien (days=30)', responses: { '200': { description: OK } } }
+  /progress/deadlines:
+    get: { tags: [Progression], summary: 'Échéances à venir', responses: { '200': { description: OK } } }
+
+  /search:
+    get: { tags: [Recherche et notifications], summary: 'Recherche globale (q, types=course,folder,lesson,document,note,flashcard)', responses: { '200': { description: Résultats avec matière et dossier parents } } }
+  /notifications:
+    get: { tags: [Recherche et notifications], summary: 'Notifications', responses: { '200': { description: Liste } } }
+  /notifications/read:
+    post: { tags: [Recherche et notifications], summary: 'Marquer comme lues ({ ids } ou { all: true })', responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+
+  /sync/changes:
+    get: { tags: [Synchronisation], summary: 'Changements depuis ?since= (et suppressions)', responses: { '200': { description: OK } } }
+  /sync/push:
+    post:
+      tags: [Synchronisation]
+      summary: Appliquer des opérations hors ligne (idempotent, résolution de conflits documentée)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { operations: { type: array, items: { $ref: '#/components/schemas/SyncOperation' } } } } } } }
+      responses: { '200': { description: 'Résultat par opération (applied, duplicate, conflict, error)' } }
