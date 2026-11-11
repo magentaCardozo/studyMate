@@ -6,6 +6,7 @@ import { ownedCourse, ownedSemester, tombstone } from '../../services/ownership'
 import { storage, documentPrefix } from '../../services/storage';
 import { body, pageArgs, pageMeta, pagination, param, query, userId } from '../../utils/http';
 import { buildCourseTree, courseStats, presentCourse } from './courses.service';
+import { buildKnowledgeBase, knowledgeBaseMarkdown } from './knowledge-base';
 
 export const coursesRouter = Router();
 
@@ -104,6 +105,55 @@ coursesRouter.get('/:id/knowledge-base', async (req, res) => {
       lastUpdatedAt: docs.length ? new Date(Math.max(...docs.map((d) => d.updatedAt.getTime()))) : null,
       // Même seuil que la génération (au moins ~80 caractères utiles).
       canGenerate: characters >= 80,
+    },
+  });
+});
+
+/**
+ * Contenu de la base de connaissances : le texte extrait de tous les documents du dossier,
+ * réuni au même endroit. ?format=md : téléchargement en Markdown.
+ */
+coursesRouter.get('/:id/knowledge-base/content', async (req, res) => {
+  const uid = userId(req);
+  const course = await ownedCourse(uid, param(req, 'id'));
+  const kb = await buildKnowledgeBase(uid, course.id);
+  if (req.query.format === 'md') {
+    const name = `base-de-connaissances-${course.title}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w-]+/g, '-').toLowerCase();
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}.md"`);
+    res.send(knowledgeBaseMarkdown(course.title, kb));
+    return;
+  }
+  res.json({ data: { courseId: course.id, title: course.title, ...kb } });
+});
+
+/**
+ * Les trois sous-dossiers fixes du dossier d'un cours : QCM, Flash-cards et Fiches de révision.
+ * Chacun liste le contenu généré à partir de la base de connaissances, du plus récent au plus ancien.
+ */
+coursesRouter.get('/:id/revisions', async (req, res) => {
+  const uid = userId(req);
+  const course = await ownedCourse(uid, param(req, 'id'));
+  const where = { userId: uid, courseId: course.id };
+  const [quizzes, decks, summaries] = await Promise.all([
+    prisma.quiz.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, title: true, provider: true, createdAt: true, _count: { select: { questions: true } }, attempts: { where: { completedAt: { not: null } }, orderBy: { completedAt: 'desc' }, take: 1, select: { score: true, maxScore: true } } },
+    }),
+    prisma.flashcardDeck.findMany({
+      where: { ...where, cards: { some: {} } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, title: true, provider: true, createdAt: true, _count: { select: { cards: true } } },
+    }),
+    prisma.summary.findMany({ where, orderBy: { createdAt: 'desc' }, select: { id: true, title: true, length: true, provider: true, createdAt: true } }),
+  ]);
+  res.json({
+    data: {
+      courseId: course.id,
+      qcm: quizzes.map((q) => ({ id: q.id, title: q.title, provider: q.provider, createdAt: q.createdAt, questions: q._count.questions, lastScore: q.attempts[0]?.maxScore ? Math.round(((q.attempts[0].score ?? 0) / q.attempts[0].maxScore) * 100) : null })),
+      flashcards: decks.map((d) => ({ id: d.id, title: d.title, provider: d.provider, createdAt: d.createdAt, cards: d._count.cards })),
+      fiches: summaries.map((s) => ({ id: s.id, title: s.title, provider: s.provider, createdAt: s.createdAt, length: s.length })),
     },
   });
 });

@@ -14,6 +14,7 @@ Déclencheurs : retour du réseau (`ConnectivityManager`), modification locale (
 - Les ressources créées hors ligne reçoivent un UUID local, accepté tel quel par le serveur.
 - Chaque opération porte un `opId`. Le serveur enregistre les opérations appliquées (`SyncOperation`) : un renvoi (perte de réponse réseau) renvoie `duplicate` sans effet.
 - Les révisions de cartes utilisent leur propre identifiant (`clientOpId`) : jamais comptées deux fois.
+- Un QCM d'entraînement terminé sur l'appareil est envoyé comme opération `quiz_result` (identifiant = identifiant de la tentative) : le serveur crée la tentative, note les réponses avec le même barème que le web et met à jour les questions ratées de l'onglet Révisions. Un renvoi est ignoré.
 
 ## Fusion des modifications locales
 
@@ -27,6 +28,7 @@ Les mises à jour successives d'une même ressource (sauvegarde automatique d'un
 | Leçon : changement de statut (terminée / en cours) | Toujours appliqué (fait local), avec l'heure locale de l'action. |
 | Leçon, matière, carte : modification de contenu en conflit | La version serveur l'emporte ; l'étudiant est informé. |
 | Révision de carte | Ajout pur, rejoué dans l'ordre ; l'algorithme SM-2 est identique sur l'appareil et le serveur. |
+| Résultat de QCM (`quiz_result`) | Ajout pur, idempotent ; notation faite par le serveur. |
 | Session d'étude (fait / passée) | Appliquée. |
 | Ressource supprimée ailleurs | Supprimée localement à la réception de la trace. |
 | Échec répété (5 tentatives) | L'opération reste en file, l'erreur est affichée ; elle n'est plus réessayée automatiquement. |
@@ -41,7 +43,7 @@ Lors de la réception, une ressource ayant encore une opération locale en atten
 | Notes (création, modification, suppression) | Ajout à la base de connaissances (PDF, scan + OCR, texte collé) |
 | Statut des leçons, sessions faites / passées | Téléchargement de documents |
 | Étude des cartes (SM-2 local) | Quiz en mode examen (corrections non stockées sur l'appareil) |
-| Quiz d'entraînement (correction locale, résultat conservé sur l'appareil) | Programme de révision, statistiques |
+| QCM d'entraînement, choix unique et multiples (correction locale ; réponses envoyées à la synchronisation) | Programme de révision, statistiques |
 | Documents téléchargés et texte extrait mis en cache | Création de comptes, consentement IA |
 
 Aucun modèle d'IA ne fonctionne sur l'appareil.

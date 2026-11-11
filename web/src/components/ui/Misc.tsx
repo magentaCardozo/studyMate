@@ -64,20 +64,29 @@ export function PageHeader({ title, subtitle, actions, eyebrow }: { title: React
   );
 }
 
-export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: T; label: string; count?: number }[]; value: T; onChange: (v: T) => void }) {
+export function Tabs<T extends string>({ tabs, value, onChange, label, controls }: { tabs: { id: T; label: string; shortLabel?: string; count?: number; icon?: ReactNode }[]; value: T; onChange: (v: T) => void; label?: string; controls?: string }) {
   return (
-    <div role="tablist" className="mb-5 flex gap-1 overflow-x-auto border-b border-line">
+    <div role="tablist" aria-label={label} className="mb-5 flex gap-1 overflow-x-auto border-b border-line">
       {tabs.map((t) => (
         <button
           key={t.id}
           role="tab"
           type="button"
           aria-selected={value === t.id}
+          aria-controls={controls}
           onClick={() => onChange(t.id)}
-          className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${value === t.id ? 'border-crimson text-crimson' : 'border-transparent text-muted hover:text-charcoal'}`}
+          className={`-mb-px inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${value === t.id ? 'border-crimson text-crimson' : 'border-transparent text-muted hover:text-charcoal'}`}
         >
-          {t.label}
-          {t.count !== undefined && <span className="ml-1.5 text-xs text-muted">{t.count}</span>}
+          {t.icon}
+          {t.shortLabel ? (
+            <>
+              <span className="sm:hidden">{t.shortLabel}</span>
+              <span className="hidden sm:inline">{t.label}</span>
+            </>
+          ) : (
+            t.label
+          )}
+          {t.count !== undefined && <span className={`rounded-full px-1.5 py-px text-[11px] tabular-nums ${value === t.id ? 'bg-crimson text-white' : 'bg-charcoal/[0.07] text-muted'}`}>{t.count}</span>}
         </button>
       ))}
     </div>

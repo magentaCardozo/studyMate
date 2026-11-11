@@ -258,20 +258,20 @@ export default function LessonPage() {
       {tab === 'revision' && (
         <div className="grid gap-6 md:grid-cols-3">
           <section>
-            <h3 className="mb-2 font-serif text-lg font-semibold">Résumés</h3>
+            <h3 className="mb-2 font-serif text-lg font-medium">Résumés</h3>
             {l.summaries.length ? l.summaries.map((s) => <Link key={s.id} to={`/revision/summaries/${s.id}`} className="card mb-2 block p-3 text-sm hover:border-charcoal/25"><p className="font-medium">{s.title}</p><p className="meta">{relativeDay(s.createdAt)}</p></Link>) : <p className="meta">Aucun résumé.</p>}
           </section>
           <section>
-            <h3 className="mb-2 font-serif text-lg font-semibold">Cartes mémoire</h3>
+            <h3 className="mb-2 font-serif text-lg font-medium">Cartes mémoire</h3>
             {l.decks.length ? l.decks.map((d) => <Link key={d.id} to={`/revision/decks/${d.id}`} className="card mb-2 block p-3 text-sm hover:border-charcoal/25"><p className="font-medium">{d.title}</p><p className="meta">{d._count.cards} cartes</p></Link>) : <p className="meta">Aucun paquet.</p>}
           </section>
           <section>
-            <h3 className="mb-2 font-serif text-lg font-semibold">Quiz</h3>
+            <h3 className="mb-2 font-serif text-lg font-medium">Quiz</h3>
             {l.quizzes.length ? l.quizzes.map((q) => <Link key={q.id} to={`/revision/quizzes/${q.id}`} className="card mb-2 block p-3 text-sm hover:border-charcoal/25"><p className="font-medium">{q.title}</p><p className="meta">{q._count.questions} questions · {q.configuration.mode === 'exam' ? 'Examen' : 'Entraînement'}</p></Link>) : <p className="meta">Aucun quiz.</p>}
           </section>
           {l.sessions.length > 0 && (
             <section className="md:col-span-3">
-              <h3 className="mb-2 font-serif text-lg font-semibold">Sessions prévues</h3>
+              <h3 className="mb-2 font-serif text-lg font-medium">Sessions prévues</h3>
               <ul className="space-y-1 text-sm">{l.sessions.map((s) => <li key={s.id}>{formatDateTime(s.scheduledStart)} — {ACTIVITY_LABEL[s.activityType]}</li>)}</ul>
             </section>
           )}

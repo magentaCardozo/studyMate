@@ -48,7 +48,7 @@ export function Dialog({ open, onClose, title, description, children, footer, si
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`flex max-h-[92vh] w-full flex-col rounded-t-xl bg-white shadow-pop sm:rounded-xl ${widths[size]}`}>
         <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div>
-            <h2 id={titleId} className="font-serif text-lg font-semibold">
+            <h2 id={titleId} className="font-serif text-lg font-medium">
               {title}
             </h2>
             {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}

@@ -2,11 +2,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../services/prisma';
-import { ownedCard, ownedCourse, ownedLesson, ownedNote, ownedSession, resolvePlacement, tombstone } from '../../services/ownership';
+import { ownedCard, ownedCourse, ownedLesson, ownedNote, ownedQuiz, ownedSession, resolvePlacement, tombstone } from '../../services/ownership';
 import { schedule } from '../../services/srs';
 import { body, query, userId } from '../../utils/http';
 import { AppError } from '../../utils/errors';
-import { configOf } from '../quizzes/quizzes.service';
+import { configOf, submitAttempt } from '../quizzes/quizzes.service';
 
 export const syncRouter = Router();
 
@@ -64,7 +64,7 @@ syncRouter.get('/changes', async (req, res) => {
 
 const operation = z.object({
   opId: z.string().uuid(),
-  entity: z.enum(['note', 'lesson', 'course', 'folder', 'flashcard', 'flashcard_review', 'session']),
+  entity: z.enum(['note', 'lesson', 'course', 'folder', 'flashcard', 'flashcard_review', 'session', 'quiz_result']),
   action: z.enum(['create', 'update', 'delete']),
   id: z.string().uuid(),
   data: z.record(z.unknown()).default({}),
@@ -82,7 +82,7 @@ const isNewer = (serverUpdatedAt: Date, base?: Date | null) => !!base && serverU
  *  - notes : si la note a changé sur le serveur depuis la version de base, la version serveur
  *    est conservée et la version locale est enregistrée comme copie « (conflit) » — rien n'est perdu ;
  *  - autres ressources : la version serveur l'emporte et est renvoyée au client ;
- *  - révisions de cartes : ajout pur, idempotent (jamais de conflit).
+ *  - révisions de cartes et résultats de QCM passés sur l'appareil : ajout pur, idempotent (jamais de conflit).
  */
 async function apply(uid: string, op: Op): Promise<Result> {
   const base = { opId: op.opId, entity: op.entity, id: op.id };
@@ -192,6 +192,25 @@ async function apply(uid: string, op: Op): Promise<Result> {
         prisma.flashcardReview.create({ data: { userId: uid, flashcardId: card.id, responseRating: rating, reviewedAt, nextReviewAt: next.dueAt, intervalDays: next.intervalDays, clientOpId: op.id } }),
       ]);
       return { ...base, status: 'applied', server: review };
+    }
+    case 'quiz_result': {
+      // QCM d'entraînement passé sur l'appareil (éventuellement hors ligne) : op.id = identifiant de la
+      // tentative (idempotence) ; data.quizId, data.responses = [{ questionId, response }].
+      const existing = await prisma.quizAttempt.findUnique({ where: { id: op.id } });
+      if (existing) return { ...base, status: existing.userId === uid ? 'duplicate' : 'error', server: existing.userId === uid ? existing : undefined };
+      const quiz = await ownedQuiz(uid, String(d.quizId));
+      if (configOf(quiz.configuration).mode === 'exam') return { ...base, status: 'error', code: 'EXAM_ONLINE_ONLY', message: 'Un examen se passe en ligne.' };
+      const questions = await prisma.quizQuestion.findMany({ where: { quizId: quiz.id } });
+      const answeredAt = op.clientTime && op.clientTime < new Date() ? op.clientTime : new Date();
+      const responses = (Array.isArray(d.responses) ? d.responses : []) as { questionId?: unknown; response?: unknown }[];
+      const attempt = await prisma.quizAttempt.create({ data: { id: op.id, userId: uid, quizId: quiz.id, mode: 'practice', startedAt: answeredAt } });
+      for (const r of responses) {
+        const q = questions.find((x) => x.id === r.questionId);
+        if (!q || r.response === undefined || r.response === null) continue;
+        await prisma.quizResponse.create({ data: { attemptId: attempt.id, questionId: q.id, response: r.response as Prisma.InputJsonValue, answeredAt } });
+      }
+      // La notation est faite par le serveur (même barème que sur le web).
+      return { ...base, status: 'applied', server: await submitAttempt(attempt) };
     }
     case 'session': {
       const s = await ownedSession(uid, op.id);

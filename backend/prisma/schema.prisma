@@ -489,11 +489,14 @@ model QuizQuestion {
   points          Float        @default(1)
   // Signalé comme potentiellement ambigu par le générateur ou le validateur.
   uncertain       Boolean      @default(false)
+  // Copie d'une question ratée (QCM « Questions ratées ») : question d'origine.
+  originQuestionId String?     @db.Uuid
 
   quiz      Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
   responses QuizResponse[]
 
   @@index([quizId, ordinal])
+  @@index([originQuestionId])
 }
 
 enum AttemptStatus {

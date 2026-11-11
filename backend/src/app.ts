@@ -23,6 +23,7 @@ import { documentsRouter, fileTransferRouter } from './modules/documents/documen
 import { notesRouter } from './modules/notes/notes.routes';
 import { flashcardsRouter } from './modules/flashcards/flashcards.routes';
 import { attemptsRouter, quizzesRouter } from './modules/quizzes/quizzes.routes';
+import { reviewRouter } from './modules/review/review.routes';
 import { aiRouter, summariesRouter } from './modules/ai/ai.routes';
 import { calendarRouter, goalsRouter, studyPlansRouter, studySessionsRouter } from './modules/study-plans/study-plans.routes';
 import { dashboardRouter, progressRouter } from './modules/progress/progress.routes';
@@ -88,6 +89,7 @@ export function createApp() {
   secured.use('/flashcards', flashcardsRouter);
   secured.use('/quizzes', quizzesRouter);
   secured.use('/quiz-attempts', attemptsRouter);
+  secured.use('/review', reviewRouter);
   secured.use('/ai', aiRouter);
   secured.use('/summaries', summariesRouter);
   secured.use('/goals', goalsRouter);

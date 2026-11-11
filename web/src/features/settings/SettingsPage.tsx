@@ -18,7 +18,7 @@ import { useAiStatus } from '../smart-revision/GenerateDialog';
 function Section({ id, title, description, children }: { id?: string; title: string; description?: string; children: React.ReactNode }) {
   return (
     <section id={id} className="card scroll-mt-24 p-5 md:p-6">
-      <h2 className="font-serif text-lg font-semibold">{title}</h2>
+      <h2 className="font-serif text-lg font-medium">{title}</h2>
       {description && <p className="meta mb-4 mt-0.5">{description}</p>}
       <div className={description ? '' : 'mt-4'}>{children}</div>
     </section>

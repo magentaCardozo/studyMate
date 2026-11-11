@@ -42,7 +42,7 @@ export function EmptyState({ icon, title, description, action }: { icon?: ReactN
   return (
     <div className="flex flex-col items-center rounded-lg border border-dashed border-line bg-white/60 px-6 py-12 text-center">
       {icon && <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-crimson-soft text-crimson">{icon}</div>}
-      <h3 className="font-serif text-lg font-semibold">{title}</h3>
+      <h3 className="font-serif text-lg font-medium">{title}</h3>
       {description && <p className="mt-1.5 max-w-md text-sm text-muted">{description}</p>}
       {action && <div className="mt-5 flex flex-wrap justify-center gap-2">{action}</div>}
     </div>
@@ -53,7 +53,7 @@ export function ErrorState({ error, onRetry, title = 'Impossible de charger cett
   return (
     <div role="alert" className="flex flex-col items-center rounded-lg border border-danger/20 bg-danger-soft/60 px-6 py-10 text-center">
       <AlertTriangle className="mb-3 text-danger" size={28} aria-hidden />
-      <h3 className="font-serif text-lg font-semibold">{title}</h3>
+      <h3 className="font-serif text-lg font-medium">{title}</h3>
       <p className="mt-1 max-w-md text-sm text-muted">{errorMessage(error)}</p>
       {onRetry && (
         <button type="button" onClick={onRetry} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-crimson hover:underline">

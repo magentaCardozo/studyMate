@@ -61,7 +61,7 @@ export interface Course {
   lastActivityAt: string | null;
   semester: { id: string; name: string } | null;
   academicYear: { id: string; name: string } | null;
-  stats?: { folders: number; lessons: number; documents: number; completedLessons: number; progress: number | null };
+  stats?: { folders: number; lessons: number; documents: number; completedLessons: number; progress: number | null; qcm?: number; flashcards?: number; fiches?: number };
 }
 
 export interface TreeLesson {
@@ -391,4 +391,18 @@ export interface Scope {
   folderId?: string | null;
   lessonId?: string | null;
   documentIds?: string[];
+}
+
+/** Contenu des trois sous-dossiers fixes d'un dossier (du plus récent au plus ancien). */
+export interface RevisionItem {
+  id: string;
+  title: string;
+  provider: string | null;
+  createdAt: string;
+}
+export interface CourseRevisions {
+  courseId: string;
+  qcm: (RevisionItem & { questions: number; lastScore: number | null })[];
+  flashcards: (RevisionItem & { cards: number })[];
+  fiches: (RevisionItem & { length: string })[];
 }

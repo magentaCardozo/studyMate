@@ -30,6 +30,8 @@ export default function CoursesPage() {
   const [deleting, setDeleting] = useState<Course | null>(null);
   const q = useDebounce(search);
   const { data, isLoading, error, refetch } = useCourses(qs({ q, academicYearId: yearId, semesterId, sort, archived: archived ? 'true' : 'false', pageSize: 100 }));
+  // Filtres par année / semestre seulement s'ils servent : dossiers classés par période, ou filtre déjà actif.
+  const showPeriodFilters = !!(yearId || semesterId) || !!data?.data.some((c) => c.semester);
   const semesters = years.data?.find((y) => y.id === yearId)?.semesters ?? years.data?.flatMap((y) => y.semesters) ?? [];
 
   const invalidate = () => {
@@ -71,6 +73,7 @@ export default function CoursesPage() {
           <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un dossier, un code…" aria-label="Rechercher un dossier" className="field pl-9" />
         </div>
         <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+          {showPeriodFilters && <>
           <Select aria-label="Année académique" value={yearId} onChange={(e) => (setYearId(e.target.value), setSemesterId(''))}>
             <option value="">Toutes les années</option>
             {years.data?.map((y) => (
@@ -87,6 +90,7 @@ export default function CoursesPage() {
               </option>
             ))}
           </Select>
+          </>}
           <Select aria-label="Trier" value={sort} onChange={(e) => setSort(e.target.value as 'recent' | 'alpha')}>
             <option value="recent">Activité récente</option>
             <option value="alpha">Ordre alphabétique</option>
@@ -111,40 +115,35 @@ export default function CoursesPage() {
       ) : view === 'grid' ? (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {data.data.map((c) => (
-            <li key={c.id} className="card flex flex-col">
+            <li key={c.id} className="card relative flex flex-col transition-colors hover:border-charcoal/25">
               <div className="h-1 rounded-t-lg" style={{ background: c.color ?? '#A51C30' }} aria-hidden />
               <div className="flex flex-1 flex-col p-5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     {c.code && <p className="text-xs font-medium uppercase tracking-wide text-muted">{c.code}</p>}
-                    <Link to={`/courses/${c.id}`} className="font-serif text-lg font-semibold leading-snug hover:text-crimson">
+                    <Link to={`/courses/${c.id}`} className="font-serif text-lg font-medium leading-snug after:absolute after:inset-0 hover:text-crimson">
                       {c.title}
                     </Link>
                   </div>
-                  {menu(c)}
+                  <span className="relative z-10">{menu(c)}</span>
                 </div>
-                <p className="meta mt-1">
-                  {[c.faculty, c.semester?.name, c.academicYear?.name].filter(Boolean).join(' · ') || 'Sans semestre'}
-                </p>
-                <p className="mt-3 text-sm text-charcoal/80">
-                  {plural(c.stats!.documents, 'document')}{c.stats!.folders ? ` · ${plural(c.stats!.folders, 'sous-dossier')}` : ''}{c.stats!.lessons ? ` · ${plural(c.stats!.lessons, 'leçon')}` : ''}
-                </p>
-                {c.stats!.progress !== null && (
-                  <div className="mt-3">
-                    <div className="mb-1 flex justify-between text-xs text-muted">
-                      <span>Leçons terminées</span>
-                      <span>{c.stats!.completedLessons}/{c.stats!.lessons}</span>
-                    </div>
-                    <ProgressBar value={c.stats!.progress} label={`Progression ${c.title}`} tone="success" />
-                  </div>
+                {[c.faculty, c.semester?.name, c.academicYear?.name].some(Boolean) && (
+                  <p className="meta mt-1">{[c.faculty, c.semester?.name, c.academicYear?.name].filter(Boolean).join(' · ')}</p>
                 )}
+                <p className="mt-3 text-sm text-charcoal/80">{plural(c.stats!.documents, 'document')}</p>
+                {/* Contenu des trois sous-dossiers */}
+                <ul className="mt-3 grid grid-cols-3 gap-2 text-center" aria-label="Révisions générées">
+                  {[['QCM', c.stats!.qcm], ['Flash-cards', c.stats!.flashcards], ['Fiches', c.stats!.fiches]].map(([label, n]) => (
+                    <li key={label as string} className="rounded-md bg-ivory px-2 py-2">
+                      <span className="block font-serif text-lg font-medium leading-none tabular-nums">{n ?? 0}</span>
+                      <span className="text-[11.5px] text-muted">{label}</span>
+                    </li>
+                  ))}
+                </ul>
                 <div className="mt-auto flex items-center justify-between pt-4">
                   <span className="meta">Activité : {relativeDay(c.lastActivityAt)}</span>
                   <span className="flex gap-1">{c.isDemo && <DemoBadge />}{c.archivedAt && <span className="chip">Archivée</span>}</span>
                 </div>
-                <Link to={`/courses/${c.id}`} className="mt-3 text-sm font-medium text-crimson hover:underline">
-                  Ouvrir le dossier →
-                </Link>
               </div>
             </li>
           ))}
@@ -174,7 +173,7 @@ export default function CoursesPage() {
                   </td>
                   <td className="px-4 py-3 text-muted">{c.semester?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-muted">
-                    {c.stats!.documents} docs · {c.stats!.folders} sous-dossiers
+                    {plural(c.stats!.documents, 'document')} · {c.stats!.qcm ?? 0} QCM · {c.stats!.flashcards ?? 0} paquets · {plural(c.stats!.fiches ?? 0, 'fiche')}
                   </td>
                   <td className="px-4 py-3 text-muted">{relativeDay(c.lastActivityAt)}</td>
                   <td className="px-2">{menu(c)}</td>

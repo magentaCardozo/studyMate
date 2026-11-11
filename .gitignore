@@ -71,3 +71,6 @@ Thumbs.db
 !.vscode/extensions.json
 *.swp
 *~
+
+# Identifiants de test locaux
+*.local.md

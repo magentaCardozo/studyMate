@@ -124,7 +124,7 @@ function ResultsView({ attemptId }: { attemptId: string }) {
     <div className="space-y-6">
       <div className="card p-6 text-center">
         <p className="text-sm text-muted">{r.attempt.status === 'EXPIRED' ? 'Temps écoulé — tentative remise automatiquement' : 'Résultat'}</p>
-        <p className={`mt-1 font-serif text-5xl font-semibold ${pct >= 60 ? 'text-success' : 'text-warning'}`}>{pct} %</p>
+        <p className={`mt-1 font-serif text-5xl font-medium ${pct >= 60 ? 'text-success' : 'text-warning'}`}>{pct} %</p>
         <p className="mt-1 text-muted">{r.attempt.score} / {r.attempt.maxScore} points</p>
         <div className="mt-4 flex flex-wrap justify-center gap-2 text-sm">
           <Badge tone="success">{r.summary.correct} correctes</Badge>
@@ -139,7 +139,7 @@ function ResultsView({ attemptId }: { attemptId: string }) {
       </div>
       {(r.summary.missedTopics.length > 0 || r.suggestedLessons.length > 0) && (
         <div className="card p-5">
-          <h2 className="mb-2 font-serif text-lg font-semibold">À retravailler</h2>
+          <h2 className="mb-2 font-serif text-lg font-medium">À retravailler</h2>
           {r.summary.missedTopics.length > 0 && <p className="text-sm">Notions manquées : {r.summary.missedTopics.join(', ')}.</p>}
           {r.suggestedLessons.length > 0 && <p className="mt-2 text-sm">Leçons suggérées : {r.suggestedLessons.map((l, i) => <span key={l.id}>{i > 0 && ', '}<Link to={`/lessons/${l.id}`} className="text-crimson hover:underline">{l.title}</Link></span>)}</p>}
         </div>
@@ -254,8 +254,7 @@ export default function AttemptPage() {
     try {
       await api.post(`/quiz-attempts/${id}/submit`);
       localStorage.removeItem(storageKey);
-      qc.invalidateQueries({ queryKey: ['quizzes'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      for (const k of ['quizzes', 'dashboard', 'review', 'revisions']) qc.invalidateQueries({ queryKey: [k] });
       await refetch();
     } catch (e) {
       toast.error(e);
@@ -278,8 +277,8 @@ export default function AttemptPage() {
     <>
       <Breadcrumbs items={[{ label: 'Révisions', to: '/revision' }, { label: quiz.title, to: `/revision/quizzes/${quiz.id}` }, { label: attempt.status === 'IN_PROGRESS' ? 'Tentative' : 'Résultats' }]} />
       <div className="mb-5 flex flex-wrap items-center gap-3">
-        <h1 className="font-serif text-2xl font-semibold">{quiz.title}</h1>
-        <GeneratedBadge provider={quiz.provider} />
+        <h1 className="font-serif text-2xl font-medium">{quiz.title}</h1>
+        {quiz.origin === 'review' ? <Badge tone="warning">Rattrapage</Badge> : quiz.origin === 'ai' ? <GeneratedBadge provider={quiz.provider} /> : <Badge tone="neutral">Créé manuellement</Badge>}
       </div>
     </>
   );

@@ -17,7 +17,7 @@ function AuthLayout({ title, subtitle, children, footer }: { title: string; subt
       <aside className="relative hidden w-[44%] flex-col justify-between overflow-hidden bg-crimson p-12 text-white lg:flex">
         <Logo size={36} inverted />
         <div>
-          <p className="font-serif text-[34px] font-semibold leading-tight">
+          <p className="font-serif text-[40px] font-light leading-[1.08] tracking-[-0.025em]">
             Organisez votre savoir.
             <br />
             Comprenez vos cours.
@@ -39,7 +39,7 @@ function AuthLayout({ title, subtitle, children, footer }: { title: string; subt
           <div className="mb-8 lg:hidden">
             <Logo size={34} />
           </div>
-          <h1 className="font-serif text-[28px] font-semibold">{title}</h1>
+          <h1 className="font-serif text-[28px] font-medium">{title}</h1>
           <p className="mb-7 mt-1 text-muted">{subtitle}</p>
           {children}
           <div className="mt-6 text-sm text-muted">{footer}</div>

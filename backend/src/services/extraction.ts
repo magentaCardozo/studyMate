@@ -11,10 +11,23 @@ const run = promisify(execFile);
 export interface ExtractedPage {
   page: number | null;
   text: string;
+  /** texte = couche texte du PDF ; ocr = lu sur l'image (« OCR, à vérifier ») ; vide = illisible */
+  source?: 'texte' | 'ocr' | 'vide';
+  /** Nombres du texte natif non retrouvés sur l'image de la page : à vérifier. */
+  aVerifier?: string[];
+  /** Lignes « libellé + au moins 2 nombres » repérées sur la page. */
+  tableaux?: string[][];
+  /** Texte lu par OCR dans les images d'une page qui a aussi du texte (figures, extraits scannés). */
+  texteImages?: string;
 }
+
+/** Intitulé ajouté devant le texte lu dans une image, pour qu'il rejoigne la base de connaissances. */
+export const IMAGE_TEXT_HEADER = '[Texte lu dans une image — OCR, à vérifier]';
 
 export interface ExtractionResult {
   method: 'pdf-text' | 'pdf-ocr' | 'docx' | 'text' | 'image-ocr';
+  /** Moteur OCR utilisé par la méthode d'extraction locale (Tesseract fra+eng, EasyOCR…). */
+  ocr?: { moteur: string | null; langues: string | null; indisponible: string | null };
   pageCount: number | null;
   pages: ExtractedPage[];
   // Pages pour lesquelles aucun texte fiable n'a pu être obtenu.
@@ -59,7 +72,79 @@ export function normalizeText(text: string) {
     .trim();
 }
 
+/** Réponse du module Python backend/ocr/studymate_ocr.py (commande « extraire »). */
+interface PythonExtraction {
+  ok: boolean;
+  raison?: string;
+  pages_total: number;
+  moteur: string | null;
+  langues: string | null;
+  ocr_indisponible: string | null;
+  pages: { page: number; texte: string; source: 'texte' | 'ocr' | 'vide'; a_verifier: string[]; tableaux: string[][]; texte_images?: string }[];
+}
+
+const OCR_SCRIPT = process.env.OCR_SCRIPT ?? path.resolve(__dirname, '../../ocr/studymate_ocr.py');
+const OCR_CACHE_DIR = process.env.OCR_CACHE_DIR ?? path.join(tmpdir(), 'cache_ocr');
+
+/**
+ * Méthode d'extraction principale des PDF et des images : OCR local en Python (rendu 300 dpi, Tesseract
+ * fra+eng, cache MD5, nettoyage, vérification des nombres, tableaux). Renvoie null si le
+ * module n'est pas utilisable (Python ou dépendances absents) : l'extraction de repli prend le relais.
+ */
+async function extractWithPython(buffer: Buffer, kind: 'pdf' | 'png' | 'jpg'): Promise<ExtractionResult | null> {
+  if (env.OCR_ENGINE !== 'python') return null;
+  return withTmp(async (dir) => {
+    const file = path.join(dir, `doc.${kind}`);
+    await writeFile(file, buffer);
+    let out: string;
+    try {
+      ({ stdout: out } = await run(env.OCR_PYTHON, [OCR_SCRIPT, kind === 'pdf' ? 'extraire' : 'image', file, '--cache', OCR_CACHE_DIR], {
+        maxBuffer: 128 * 1024 * 1024,
+        timeout: 60 * 60 * 1000,
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+      }));
+    } catch {
+      return null; // module indisponible : repli
+    }
+    const r = JSON.parse(out) as PythonExtraction;
+    if (!r.ok) throw new ExtractionError('PDF_UNREADABLE', r.raison ?? 'Ce PDF est illisible ou protégé.');
+    const warnings: string[] = [];
+    const ocrPages = r.pages.filter((p) => p.source === 'ocr').map((p) => p.page);
+    const emptyPages = r.pages.filter((p) => p.source === 'vide').map((p) => p.page);
+    const imagePages = r.pages.filter((p) => p.texte_images?.trim()).map((p) => p.page);
+    if (kind !== 'pdf') {
+      if (ocrPages.length) warnings.push("Texte lu sur l'image (OCR, à vérifier).");
+      else warnings.push("Peu ou pas de texte détecté dans l'image.");
+    } else if (ocrPages.length) warnings.push(`Page(s) ${ocrPages.join(', ')} : texte lue(s) sur l'image (OCR, à vérifier).`);
+    if (imagePages.length) warnings.push(`Page(s) ${imagePages.join(', ')} : texte trouvé dans une image de la page et ajouté (OCR, à vérifier).`);
+    if (kind === 'pdf' && emptyPages.length) warnings.push(`Page(s) ${emptyPages.join(', ')} : aucun texte lisible.`);
+    for (const p of r.pages) if (p.a_verifier.length) warnings.push(`Page ${p.page} : nombre(s) non visibles sur l'image, à vérifier : ${p.a_verifier.slice(0, 8).join(', ')}.`);
+    if (r.ocr_indisponible) warnings.push(`Vérification OCR impossible : ${r.ocr_indisponible}.`);
+    return {
+      method: kind !== 'pdf' ? 'image-ocr' : ocrPages.length || imagePages.length ? 'pdf-ocr' : 'pdf-text',
+      pageCount: r.pages_total,
+      pages: r.pages.map((p) => {
+        const images = normalizeText(p.texte_images ?? '');
+        const text = normalizeText(p.texte);
+        return {
+          page: p.page,
+          // Le texte des images rejoint le texte de la page : il est donc dans la base de connaissances.
+          text: images ? `${text}\n\n${IMAGE_TEXT_HEADER}\n${images}` : text,
+          source: p.source,
+          aVerifier: p.a_verifier,
+          tableaux: p.tableaux,
+          ...(images ? { texteImages: images } : {}),
+        };
+      }),
+      warnings,
+      ocr: { moteur: r.moteur, langues: r.langues, indisponible: r.ocr_indisponible },
+    };
+  });
+}
+
 async function extractPdf(buffer: Buffer): Promise<ExtractionResult> {
+  const viaPython = await extractWithPython(buffer, 'pdf');
+  if (viaPython) return viaPython;
   return withTmp(async (dir) => {
     const file = path.join(dir, 'doc.pdf');
     await writeFile(file, buffer);
@@ -99,7 +184,18 @@ async function extractPdf(buffer: Buffer): Promise<ExtractionResult> {
 
 async function extractDocx(buffer: Buffer): Promise<ExtractionResult> {
   // Conversion en HTML pour conserver titres et paragraphes, puis en texte structuré.
-  const { value: html } = await mammoth.convertToHtml({ buffer });
+  // Les images du document (captures, schémas, pages scannées) sont lues par le même OCR.
+  const images: { buffer: Buffer; kind: 'png' | 'jpg' }[] = [];
+  const { value: html } = await mammoth.convertToHtml(
+    { buffer },
+    {
+      convertImage: mammoth.images.imgElement(async (image) => {
+        const kind = image.contentType === 'image/png' ? 'png' : image.contentType === 'image/jpeg' ? 'jpg' : null;
+        if (kind && images.length < 50) images.push({ buffer: Buffer.from(await image.readAsArrayBuffer()), kind });
+        return { src: '' };
+      }),
+    },
+  );
   const text = normalizeText(
     html
       .replace(/<h([1-6])[^>]*>/g, (_m, n) => '\n\n' + '#'.repeat(Number(n)) + ' ')
@@ -114,8 +210,21 @@ async function extractDocx(buffer: Buffer): Promise<ExtractionResult> {
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'"),
   );
+  const imageTexts: string[] = [];
+  for (const img of images) {
+    const r = await extractWithPython(img.buffer, img.kind).catch(() => null);
+    const t = r?.pages.map((p) => p.text).join('\n').trim();
+    if (t) imageTexts.push(t);
+  }
+  const warnings = imageTexts.length ? [`${imageTexts.length} image(s) du document lue(s) par OCR et ajoutée(s) (à vérifier).`] : [];
+  const full = imageTexts.length ? `${text}\n\n${imageTexts.map((t) => `${IMAGE_TEXT_HEADER}\n${t}`).join('\n\n')}` : text;
   // Un .docx n'a pas de pagination fiable : pas de numéro de page (on ne l'invente pas).
-  return { method: 'docx', pageCount: null, pages: [{ page: null, text }], warnings: [] };
+  return {
+    method: 'docx',
+    pageCount: null,
+    pages: [{ page: null, text: full, ...(imageTexts.length ? { texteImages: imageTexts.join('\n\n') } : {}) }],
+    warnings,
+  };
 }
 
 export async function extractText(buffer: Buffer, mime: string): Promise<ExtractionResult> {
@@ -128,7 +237,10 @@ export async function extractText(buffer: Buffer, mime: string): Promise<Extract
     case 'text/markdown':
       return { method: 'text', pageCount: null, pages: [{ page: null, text: normalizeText(buffer.toString('utf-8')) }], warnings: [] };
     case 'image/jpeg':
-    case 'image/png':
+    case 'image/png': {
+      // Même méthode que les pages scannées des PDF (300 dpi, niveaux de gris, Tesseract fra+eng, nettoyage).
+      const viaPython = await extractWithPython(buffer, mime === 'image/png' ? 'png' : 'jpg');
+      if (viaPython) return viaPython;
       return withTmp(async (dir) => {
         const file = path.join(dir, mime === 'image/png' ? 'img.png' : 'img.jpg');
         await writeFile(file, buffer);
@@ -136,6 +248,7 @@ export async function extractText(buffer: Buffer, mime: string): Promise<Extract
         const warnings = text.replace(/\s/g, '').length < MIN_TEXT_PER_PAGE ? ["Peu ou pas de texte détecté dans l'image."] : [];
         return { method: 'image-ocr', pageCount: 1, pages: [{ page: 1, text }], warnings };
       });
+    }
     default:
       throw new ExtractionError('UNSUPPORTED_TYPE', 'Type de fichier non pris en charge.');
   }

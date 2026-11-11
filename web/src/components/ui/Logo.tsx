@@ -17,7 +17,7 @@ export function Logo({ size = 32, inverted = false }: { size?: number; inverted?
   return (
     <span className="inline-flex items-center gap-2.5" aria-label="StudyMate AI">
       <LogoMark size={size} inverted={inverted} />
-      <span className={`font-serif text-[19px] font-semibold tracking-tight ${inverted ? 'text-white' : 'text-charcoal'}`}>
+      <span className={`font-serif text-[19px] font-medium tracking-tight ${inverted ? 'text-white' : 'text-charcoal'}`}>
         StudyMate<span className={`ml-1 align-top font-sans text-[11px] font-semibold tracking-[0.12em] ${inverted ? 'text-white/80' : 'text-crimson'}`}>AI</span>
       </span>
     </span>

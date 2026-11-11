@@ -26,6 +26,10 @@ COPYFILE_DISABLE=1 tar --no-xattrs -C "$ROOT" -czf "$TMP/release.tar.gz" \
 aws s3 cp "$TMP/release.tar.gz" "s3://$BUCKET/$KEY" --region "$REGION" --only-show-errors
 if [ -f "$ROOT/android/dist/studymate.apk" ]; then
   aws s3 cp "$ROOT/android/dist/studymate.apk" "s3://$BUCKET/releases/studymate.apk" --region "$REGION" --only-show-errors
+  # Manifeste de mise à jour (android/scripts/build-apk.sh) : les applications installées le consultent.
+  if [ -f "$ROOT/android/dist/version.json" ]; then
+    aws s3 cp "$ROOT/android/dist/version.json" "s3://$BUCKET/releases/version.json" --region "$REGION" --only-show-errors --content-type application/json
+  fi
 fi
 rm -rf "$TMP"
 
@@ -48,6 +52,8 @@ mkdir -p app.new && tar -xzf /tmp/release.tar.gz -C app.new && rm /tmp/release.t
 rm -rf app.prev && { [ -d app ] && mv app app.prev || true; } && mv app.new app
 mkdir -p app/infrastructure/deployment/downloads
 aws s3 cp s3://$BUCKET/releases/studymate.apk app/infrastructure/deployment/downloads/studymate.apk --region $REGION --only-show-errors || true
+# Le manifeste n'est publié qu'après l'APK : une application ne voit jamais une version absente.
+aws s3 cp s3://$BUCKET/releases/version.json app/infrastructure/deployment/downloads/version.json --region $REGION --only-show-errors || true
 
 # Secrets générés une seule fois sur le serveur (conservés hors du répertoire de code).
 if [ ! -f /opt/studymate/.env.prod ]; then
@@ -104,4 +110,4 @@ while true; do
 done
 aws ssm get-command-invocation --region "$REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query '[StandardOutputContent,StandardErrorContent]' --output text | tail -40
 [ "$S" = "Success" ] || { echo "Échec du déploiement ($S)"; exit 1; }
-echo "▸ En ligne : https://$DOMAIN   —   APK : https://$DOMAIN/telecharger/studymate.apk"
+echo "▸ En ligne : https://$DOMAIN   —   APK : https://$DOMAIN/telecharger/studymate.apk   —   version : https://$DOMAIN/telecharger/version.json"

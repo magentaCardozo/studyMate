@@ -6,15 +6,19 @@ Espace académique personnel pour les étudiants de l'enseignement supérieur (R
 
 ## Fonctionnement : le dossier comme base de connaissances
 
-1. **Créer un dossier** — un par cours, par exemple « Statistique ». C'est l'unité de premier niveau ; le classement par année / semestre est facultatif, les sous-dossiers aussi.
-2. **Constituer la base de connaissances** du dossier, de trois façons :
-   - **importer un PDF** (Word et fichiers texte acceptés) ;
-   - **scanner un document** (photos des pages → PDF, texte reconnu par OCR et corrigible) ;
-   - **coller du texte** dans le champ prévu (extrait de cours, notes, transcription).
-   Tout document appartient obligatoirement à un dossier. Un document ne peut pas contenir d'autre document, et n'est rattaché ni à une leçon ni à une boîte « non classés ».
-3. **Réviser à partir de cette base** : questionnaire à choix multiple (QCM), fiches de révision, cartes mémoire ou examen blanc. Le contenu est généré **uniquement** à partir des documents du dossier (ou d'un sous-dossier), avec les sources citées.
+1. **Créer un dossier** par cours, par exemple « Statistique ».
+2. **Y déposer les documents du cours**, autant que nécessaire. Le dossier du cours est le **seul** endroit où l'on dépose des documents, de trois façons :
+   - **importer un PDF** (Word et fichiers texte acceptés). Le texte est extrait par l'OCR local : couche texte, sinon Tesseract fra+eng à 300 dpi, avec les nombres à vérifier signalés ([docs/ocr.md](docs/ocr.md)) ;
+   - **scanner un document** (photos des pages → PDF, texte reconnu par OCR) ;
+   - **coller du texte** (extrait de cours, notes, transcription).
+   Le texte de tout ce qui est déposé (couche texte des PDF, pages scannées, images contenues dans les PDF et les fichiers Word, photos importées, textes collés) est extrait et réuni dans la **base de connaissances** du dossier, consultable au même endroit (« Voir la base de connaissances », téléchargeable en Markdown).
+3. **Trois sous-dossiers fixes**, et seulement trois : **QCM**, **Flash-cards** et **Fiches de révision**. Chacun a un bouton **« Générer »** qui crée le contenu à partir de la base de connaissances actuelle, c'est-à-dire tous les documents prêts du dossier. Le contenu généré y est rangé et classé par date, du plus récent au plus ancien.
 
-Côté API, le dossier de premier niveau correspond à la ressource historique `/courses` ; `GET /courses/:id/knowledge-base` donne l'état de la base et `POST /documents/text` ajoute un texte collé.
+4. **Onglet Révisions** : on n'y génère rien. On y termine les QCM commencés ou jamais faits, et on y retravaille les **questions ratées**, c'est-à-dire celles dont la dernière réponse est fausse. « Retravailler » crée un QCM de rattrapage avec ces questions ; une question quitte la liste dès qu'on y répond juste. Les QCM passés sur Android, même hors ligne, sont envoyés au serveur à la synchronisation et notés par lui.
+
+Application Android : thème clair, sombre ou « comme le système » (Profil › Apparence). Les mises à jour sont détectées automatiquement et installées après vérification ; voir [docs/deployment-aws.md](docs/deployment-aws.md).
+
+Côté API, le dossier de premier niveau correspond à la ressource historique `/courses` ; `GET /courses/:id/knowledge-base` donne l'état de la base, `GET /courses/:id/knowledge-base/content` le texte réuni de tous les documents, `GET /courses/:id/revisions` le contenu des trois sous-dossiers, `GET /review` et `POST /review/mistakes-quiz` l'onglet Révisions, et `POST /documents/text` ajoute un texte collé.
 
 ## Contenu du dépôt
 

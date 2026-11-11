@@ -15,6 +15,8 @@ export interface Scope {
 
 export interface GatheredContext {
   label: string;
+  /** Nom court de la portée (titre du dossier, de la leçon…), pour nommer le contenu généré. */
+  name: string;
   courseId: string | null;
   lessonId: string | null;
   documents: { id: string; fileName: string; status: string }[];
@@ -43,6 +45,7 @@ async function folderSubtree(courseId: string, rootId: string) {
 export async function gatherContext(userId: string, scope: Scope, opts: { budgetChars?: number; allChunks?: boolean } = {}): Promise<GatheredContext> {
   const budget = opts.budgetChars ?? env.AI_MAX_CONTEXT_CHARS;
   let label = 'Question générale';
+  let name = 'Révision';
   let courseId: string | null = null;
   let lessonId: string | null = null;
   const docWhere: Prisma.DocumentWhereInput[] = [];
@@ -56,16 +59,19 @@ export async function gatherContext(userId: string, scope: Scope, opts: { budget
     }
     docWhere.push({ id: { in: scope.documentIds } });
     label = scope.documentIds.length === 1 ? 'Document sélectionné' : `${scope.documentIds.length} documents sélectionnés`;
+    name = label;
   } else if (scope.lessonId) {
     const l = await ownedLesson(userId, scope.lessonId);
     courseId = l.courseId;
     lessonId = l.id;
     label = `Leçon « ${l.title} »`;
+    name = l.title;
     lessons = await prisma.lesson.findMany({ where: { id: l.id }, select: lessonSelect });
   } else if (scope.folderId) {
     const f = await ownedFolder(userId, scope.folderId);
     courseId = f.courseId;
     label = `Sous-dossier « ${f.name} »`;
+    name = f.name;
     const ids = await folderSubtree(f.courseId, f.id);
     // Base de connaissances = documents du sous-dossier et de ses descendants.
     docWhere.push({ folderId: { in: ids } });
@@ -73,6 +79,7 @@ export async function gatherContext(userId: string, scope: Scope, opts: { budget
     const c = await ownedCourse(userId, scope.courseId);
     courseId = c.id;
     label = `Dossier « ${c.title} »`;
+    name = c.title;
     // Base de connaissances = tous les documents du dossier (PDF, scans, textes collés).
     docWhere.push({ courseId: c.id });
   }
@@ -120,6 +127,7 @@ export async function gatherContext(userId: string, scope: Scope, opts: { budget
   }
   return {
     label,
+    name,
     courseId,
     lessonId,
     documents: documents.map((d) => ({ id: d.id, fileName: d.fileName, status: d.processingStatus })),

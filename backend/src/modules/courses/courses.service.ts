@@ -3,14 +3,18 @@ import { prisma } from '../../services/prisma';
 
 export async function courseStats(courseIds: string[]) {
   if (!courseIds.length) return new Map<string, CourseStats>();
-  const [folders, lessons, completed, docs] = await Promise.all([
+  const [folders, lessons, completed, docs, quizzes, decks, summaries] = await Promise.all([
     prisma.folder.groupBy({ by: ['courseId'], where: { courseId: { in: courseIds }, archivedAt: null }, _count: true }),
     prisma.lesson.groupBy({ by: ['courseId'], where: { courseId: { in: courseIds } }, _count: true, _max: { updatedAt: true } }),
     prisma.lesson.groupBy({ by: ['courseId'], where: { courseId: { in: courseIds }, status: 'COMPLETED' }, _count: true }),
     prisma.document.groupBy({ by: ['courseId'], where: { courseId: { in: courseIds } }, _count: true, _max: { updatedAt: true } }),
+    // Contenu des trois sous-dossiers (QCM, Flash-cards, Fiches de révision).
+    prisma.quiz.groupBy({ by: ['courseId'], where: { courseId: { in: courseIds } }, _count: true }),
+    prisma.flashcardDeck.groupBy({ by: ['courseId'], where: { courseId: { in: courseIds } }, _count: true }),
+    prisma.summary.groupBy({ by: ['courseId'], where: { courseId: { in: courseIds } }, _count: true }),
   ]);
   const map = new Map<string, CourseStats>();
-  for (const id of courseIds) map.set(id, { folders: 0, lessons: 0, completedLessons: 0, documents: 0, lastContentAt: null });
+  for (const id of courseIds) map.set(id, { folders: 0, lessons: 0, completedLessons: 0, documents: 0, qcm: 0, flashcards: 0, fiches: 0, lastContentAt: null });
   for (const f of folders) map.get(f.courseId)!.folders = f._count;
   for (const l of lessons) {
     const s = map.get(l.courseId)!;
@@ -24,10 +28,16 @@ export async function courseStats(courseIds: string[]) {
     s.documents = d._count;
     if (d._max.updatedAt && (!s.lastContentAt || d._max.updatedAt > s.lastContentAt)) s.lastContentAt = d._max.updatedAt;
   }
+  for (const q of quizzes) if (q.courseId) map.get(q.courseId)!.qcm = q._count;
+  for (const d of decks) if (d.courseId) map.get(d.courseId)!.flashcards = d._count;
+  for (const r of summaries) if (r.courseId) map.get(r.courseId)!.fiches = r._count;
   return map;
 }
 
 export interface CourseStats {
+  qcm: number;
+  flashcards: number;
+  fiches: number;
   folders: number;
   lessons: number;
   completedLessons: number;
@@ -61,6 +71,9 @@ export function presentCourse(c: CourseWithSemester, stats?: CourseStats) {
           lessons: stats.lessons,
           documents: stats.documents,
           completedLessons: stats.completedLessons,
+          qcm: stats.qcm,
+          flashcards: stats.flashcards,
+          fiches: stats.fiches,
           // Progression affichée uniquement lorsqu'elle repose sur des données réelles.
           progress: stats.lessons > 0 ? Math.round((stats.completedLessons / stats.lessons) * 100) : null,
         }

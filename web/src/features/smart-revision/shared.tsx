@@ -68,3 +68,23 @@ export function GeneratedBadge({ provider }: { provider?: string | null }) {
     </span>
   );
 }
+
+const SUBFOLDER_LABEL = { qcm: 'QCM', flashcards: 'Flash-cards', fiches: 'Fiches de révision' } as const;
+export type Subfolder = keyof typeof SUBFOLDER_LABEL;
+
+/** Fil d'Ariane d'un contenu généré : il est rangé dans un sous-dossier de son dossier. */
+export function revisionCrumbs(course: { id: string; title: string } | null | undefined, sub: Subfolder, current: string) {
+  if (!course) return [{ label: 'Révisions', to: '/revision' }, { label: current }];
+  return [
+    { label: 'Mes dossiers', to: '/courses' },
+    { label: course.title, to: `/courses/${course.id}` },
+    { label: SUBFOLDER_LABEL[sub], to: `/courses/${course.id}?s=${sub}` },
+    { label: current },
+  ];
+}
+
+/** Page à rejoindre après suppression d'un contenu généré : son sous-dossier, sinon Révisions. */
+export const revisionHome = (course: { id: string } | null | undefined, sub: Subfolder) => (course ? `/courses/${course.id}?s=${sub}` : '/revision');
+
+/** La mention « mode démonstration » est déjà portée par le badge : on ne la répète pas en bandeau. */
+export const withoutDemoNote = (limitations: string[] | undefined) => (limitations ?? []).filter((l) => !/^\s*Mode démonstration/i.test(l));

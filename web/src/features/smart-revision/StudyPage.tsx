@@ -82,7 +82,7 @@ export default function StudyPage() {
   const finished = queue.length > 0 && index >= queue.length;
   const header = (
     <div className="mb-6 flex flex-wrap items-center gap-3">
-      <h1 className="font-serif text-2xl font-semibold">Étude des cartes</h1>
+      <h1 className="font-serif text-2xl font-medium">Étude des cartes</h1>
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <Select aria-label="Cartes à étudier" value={mode} onChange={(e) => (setMode(e.target.value), setParams((p) => (p.set('mode', e.target.value), p)))} className="h-9 text-sm">
           <option value="due">À réviser</option>
@@ -115,7 +115,7 @@ export default function StudyPage() {
         {header}
         <div className="card p-8 text-center">
           <CheckCircle2 size={36} className="mx-auto text-success" />
-          <h2 className="mt-3 font-serif text-2xl font-semibold">Séance terminée</h2>
+          <h2 className="mt-3 font-serif text-2xl font-medium">Séance terminée</h2>
           <p className="mt-2 text-muted">{results.length} réponses · {known} comprises ou faciles · {results.length - known} à retravailler.</p>
           <div className="mt-6 flex justify-center gap-2">
             <Button variant="secondary" icon={<RotateCcw size={15} />} onClick={() => (qc.invalidateQueries({ queryKey: ['decks'] }), refetch())}>Nouvelle séance</Button>

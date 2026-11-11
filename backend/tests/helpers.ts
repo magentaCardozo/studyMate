@@ -58,3 +58,13 @@ export async function uploadText(u: TestUser, opts: { courseId: string; folderId
   const confirm = await api.post(u, `/documents/${res.body.data.document.id}/confirm-upload`);
   return confirm.body.data as { id: string; processingStatus: string };
 }
+
+/** Import d'un fichier binaire (PDF, image…) dans un dossier, par le parcours réel en 3 étapes. */
+export async function uploadFile(u: TestUser, opts: { courseId: string; fileName: string; mimeType: string; buffer: Buffer; source?: 'file' | 'scan' }) {
+  const res = await api.post(u, '/documents/upload-url', { fileName: opts.fileName, mimeType: opts.mimeType, fileSize: opts.buffer.length, courseId: opts.courseId, source: opts.source });
+  if (res.status !== 201) throw new Error(`upload-url failed ${res.status} ${JSON.stringify(res.body)}`);
+  const put = await request(app).put(res.body.data.upload.url).set('Content-Type', opts.mimeType).send(opts.buffer);
+  if (put.status !== 204) throw new Error(`upload failed ${put.status} ${JSON.stringify(put.body)}`);
+  const confirm = await api.post(u, `/documents/${res.body.data.document.id}/confirm-upload`);
+  return confirm.body.data as { id: string; processingStatus: string };
+}

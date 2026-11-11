@@ -7,6 +7,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 const fr = {
   'nav.overview': 'Accueil',
   'nav.courses': 'Mes dossiers',
+  'nav.coursesShort': 'Dossiers',
   'nav.revision': 'Révisions',
   'nav.coach': 'Mon coach',
   'nav.calendar': 'Calendrier',
@@ -21,6 +22,7 @@ const fr = {
   'action.paste': 'Coller du texte',
   'action.newCourse': 'Créer un dossier',
   'action.quiz': 'Générer un QCM',
+  'action.review': 'Terminer mes QCM',
   'action.plan': 'Planifier mes révisions',
   'action.logout': 'Se déconnecter',
   'common.cancel': 'Annuler',
@@ -35,6 +37,7 @@ const fr = {
 const en: Record<keyof typeof fr, string> = {
   'nav.overview': 'Overview',
   'nav.courses': 'My Folders',
+  'nav.coursesShort': 'Folders',
   'nav.revision': 'Smart Revision',
   'nav.coach': 'My Coach',
   'nav.calendar': 'Calendar',
@@ -49,6 +52,7 @@ const en: Record<keyof typeof fr, string> = {
   'action.paste': 'Paste text',
   'action.newCourse': 'Create a folder',
   'action.quiz': 'Generate a multiple-choice quiz',
+  'action.review': 'Finish my quizzes',
   'action.plan': 'Plan my revision',
   'action.logout': 'Sign out',
   'common.cancel': 'Cancel',

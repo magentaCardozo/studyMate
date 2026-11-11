@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 class AppContainer(context: Context) {
     val tokens = TokenStore(context)
     val prefs = Preferences(context)
+    val updates = com.studymateai.core.update.AppUpdater(context)
     val db = AppDatabase.build(context)
     private val _sessionExpired = MutableStateFlow(false)
     val sessionExpired: StateFlow<Boolean> = _sessionExpired

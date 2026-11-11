@@ -11,7 +11,7 @@ import { Badge, Breadcrumbs, PageHeader } from '../../components/ui/Misc';
 import { ConfirmDialog } from '../../components/ui/Dialog';
 import { useToast } from '../../components/ui/Toast';
 import { useDocumentTitle } from '../../hooks/useUtils';
-import { GeneratedBadge } from './shared';
+import { GeneratedBadge, revisionCrumbs, revisionHome, withoutDemoNote } from './shared';
 
 export default function QuizStartPage() {
   const { id } = useParams<{ id: string }>();
@@ -34,9 +34,9 @@ export default function QuizStartPage() {
 
   return (
     <div className="page max-w-3xl">
-      <Breadcrumbs items={[{ label: 'Révisions', to: '/revision' }, ...(quiz.course ? [{ label: quiz.course.title, to: `/courses/${quiz.course.id}` }] : []), { label: quiz.title }]} />
+      <Breadcrumbs items={revisionCrumbs(quiz.course, 'qcm', quiz.title)} />
       <PageHeader
-        eyebrow={<div className="flex flex-wrap gap-2">{quiz.origin === 'ai' ? <GeneratedBadge provider={quiz.provider} /> : <Badge tone="neutral">Créé manuellement</Badge>}{cfg.isMockExam && <Badge tone="crimson">Examen blanc</Badge>}</div>}
+        eyebrow={<div className="flex flex-wrap gap-2">{quiz.origin === 'review' ? <Badge tone="warning">Rattrapage</Badge> : quiz.origin === 'ai' ? <GeneratedBadge provider={quiz.provider} /> : <Badge tone="neutral">Créé manuellement</Badge>}{cfg.isMockExam && <Badge tone="crimson">Examen blanc</Badge>}</div>}
         title={quiz.title}
       />
       <div className="card space-y-4 p-6">
@@ -52,7 +52,7 @@ export default function QuizStartPage() {
             : 'La correction et l’explication s’affichent après chaque réponse.'}
           {cfg.isMockExam && ' Cet examen blanc est généré à partir de vos sources : ce n’est pas un examen officiel de votre université.'}
         </Notice>
-        {cfg.limitations && cfg.limitations.length > 0 && <Notice tone="warning">{cfg.limitations.join(' ')}</Notice>}
+        {withoutDemoNote(cfg.limitations).length > 0 && <Notice tone="warning">{withoutDemoNote(cfg.limitations).join(' ')}</Notice>}
         <Button size="lg" icon={<Play size={17} />} loading={start.isPending} onClick={() => start.mutate()}>{running ? 'Reprendre la tentative' : 'Commencer'}</Button>
       </div>
       {quiz.attempts.filter((a) => a.status !== 'IN_PROGRESS').length > 0 && (
@@ -71,9 +71,9 @@ export default function QuizStartPage() {
         </section>
       )}
       <div className="mt-8 border-t border-line pt-4">
-        <Button variant="ghost" className="text-danger" icon={<Trash2 size={15} />} onClick={() => setDel(true)}>Supprimer le quiz</Button>
+        <Button variant="ghost" className="text-danger" icon={<Trash2 size={15} />} onClick={() => setDel(true)}>Supprimer le QCM</Button>
       </div>
-      <ConfirmDialog open={del} onClose={() => setDel(false)} title="Supprimer ce quiz ?" message="Le quiz et l’historique de ses tentatives seront supprimés." onConfirm={async () => { await api.del(`/quizzes/${quiz.id}`); qc.invalidateQueries({ queryKey: ['quizzes'] }); toast.show('Quiz supprimé.'); navigate('/revision'); }} />
+      <ConfirmDialog open={del} onClose={() => setDel(false)} title="Supprimer ce QCM ?" message="Le quiz et l’historique de ses tentatives seront supprimés." onConfirm={async () => { await api.del(`/quizzes/${quiz.id}`); qc.invalidateQueries({ queryKey: ['quizzes'] }); toast.show('QCM supprimé.'); navigate(revisionHome(quiz.course, 'qcm')); }} />
     </div>
   );
 }

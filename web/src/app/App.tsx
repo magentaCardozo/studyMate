@@ -15,6 +15,7 @@ import { ApiError } from '../lib/api';
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
 const CoursesPage = lazy(() => import('../features/courses/CoursesPage'));
 const CourseDetailPage = lazy(() => import('../features/courses/CourseDetailPage'));
+const KnowledgeBasePage = lazy(() => import('../features/documents/KnowledgeBasePage'));
 const FolderPage = lazy(() => import('../features/courses/FolderPage'));
 const LessonPage = lazy(() => import('../features/courses/LessonPage'));
 const DocumentPage = lazy(() => import('../features/documents/DocumentPage'));
@@ -100,6 +101,7 @@ export function App() {
                   ['/', <DashboardPage />],
                   ['/courses', <CoursesPage />],
                   ['/courses/:id', <CourseDetailPage />],
+                  ['/courses/:id/base', <KnowledgeBasePage />],
                   ['/folders/:id', <FolderPage />],
                   ['/lessons/:id', <LessonPage />],
                   ['/documents/:id', <DocumentPage />],

@@ -40,6 +40,9 @@ const schema = z.object({
   AI_MAX_CONTEXT_CHARS: z.coerce.number().default(120_000),
 
   OCR_LANGUAGES: z.string().default('fra+eng'),
+  // python = méthode d'extraction locale backend/ocr/studymate_ocr.py ; builtin = extraction de repli
+  OCR_ENGINE: z.enum(['python', 'builtin']).default('python'),
+  OCR_PYTHON: z.string().default('python3'),
   WORKER_POLL_MS: z.coerce.number().default(2000),
   MAIL_PROVIDER: z.enum(['console']).default('console'),
   LOG_LEVEL: z.string().default('info'),

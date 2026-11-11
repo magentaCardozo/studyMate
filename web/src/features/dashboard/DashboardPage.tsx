@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, ClipboardPaste, CalendarClock, CheckCircle2, FileText, ScanLine, Sparkles, Upload, CalendarPlus, Lightbulb, History } from 'lucide-react';
+import { ArrowRight, BookOpen, FolderPlus, RotateCcw, ClipboardPaste, CalendarClock, CheckCircle2, FileText, ScanLine, Sparkles, Upload, CalendarPlus, Lightbulb, History } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useT } from '../../lib/i18n';
 import { ACTIVITY_LABEL, daysUntil, formatDate, formatTime, plural, relativeDay, STATUS_LABEL } from '../../lib/format';
@@ -47,11 +47,11 @@ export default function DashboardPage() {
   if (error) return <div className="page"><ErrorState error={error} onRetry={refetch} /></div>;
 
   const quickActions = [
-    { label: t('action.newCourse'), icon: <BookOpen size={18} />, onClick: () => quick.openNewCourse() },
+    { label: t('action.newCourse'), icon: <FolderPlus size={18} />, onClick: () => quick.openNewCourse() },
     { label: t('action.import'), icon: <Upload size={18} />, onClick: () => quick.openImport() },
     { label: t('action.scan'), icon: <ScanLine size={18} />, onClick: () => quick.openScan() },
     { label: t('action.paste'), icon: <ClipboardPaste size={18} />, onClick: () => quick.openPaste() },
-    { label: t('action.quiz'), icon: <Sparkles size={18} />, to: '/revision?generate=quiz' },
+    { label: t('action.review'), icon: <RotateCcw size={18} />, to: '/revision' },
     { label: t('action.plan'), icon: <CalendarPlus size={18} />, to: '/coach' },
   ];
 
@@ -128,7 +128,7 @@ export default function DashboardPage() {
                     <Link key={c.id} to={`/courses/${c.id}`} className="card group flex gap-3 p-4 transition-colors hover:border-charcoal/25">
                       <span className="mt-1 h-9 w-1 shrink-0 rounded-full" style={{ background: c.color ?? '#A51C30' }} aria-hidden />
                       <div className="min-w-0">
-                        <p className="truncate font-serif text-[17px] font-semibold group-hover:text-crimson">{c.title}</p>
+                        <p className="truncate font-serif text-[17px] font-medium group-hover:text-crimson">{c.title}</p>
                         <p className="meta">
                           {plural(c._count.documents, 'document')}{c._count.folders ? ` · ${plural(c._count.folders, 'sous-dossier')}` : ''}
                         </p>

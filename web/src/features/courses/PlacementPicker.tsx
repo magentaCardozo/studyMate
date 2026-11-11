@@ -46,7 +46,7 @@ export function PlacementPicker({ value, onChange, withLesson = false, optionalC
 
   return (
     <div className="space-y-3">
-      <div className={`grid gap-3 ${withLesson ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+      <div className={`grid gap-3 ${withLesson ? 'sm:grid-cols-3' : ''}`}>
         <div>
           <Select label="Dossier" value={value.courseId ?? ''} onChange={(e) => onChange({ courseId: e.target.value || null, folderId: null, lessonId: null })}>
             <option value="">{optionalCourse ? 'Aucun dossier' : 'Choisir un dossier…'}</option>
@@ -58,10 +58,10 @@ export function PlacementPicker({ value, onChange, withLesson = false, optionalC
             </button>
           )}
         </div>
-        <Select label="Sous-dossier (facultatif)" value={value.folderId ?? ''} disabled={!value.courseId} onChange={(e) => onChange({ ...value, folderId: e.target.value || null, lessonId: null })}>
+        {withLesson && <Select label="Sous-dossier (facultatif)" value={value.folderId ?? ''} disabled={!value.courseId} onChange={(e) => onChange({ ...value, folderId: e.target.value || null, lessonId: null })}>
           <option value="">Racine du dossier</option>
           {folders.map((f) => <option key={f.id} value={f.id}>{'  '.repeat(f.depth)}{f.name}</option>)}
-        </Select>
+        </Select>}
         {withLesson && (
           <Select label="Leçon (facultatif)" value={value.lessonId ?? ''} disabled={!value.courseId} onChange={(e) => onChange({ ...value, lessonId: e.target.value || null })}>
             <option value="">Aucune leçon</option>

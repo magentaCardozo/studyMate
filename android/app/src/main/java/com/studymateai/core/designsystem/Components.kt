@@ -32,6 +32,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +49,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
@@ -58,7 +63,7 @@ fun Logo(modifier: Modifier = Modifier) {
         Spacer(Modifier.width(10.dp))
         Text(
             buildAnnotatedString {
-                withStyle(SpanStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = SM.Charcoal)) { append("StudyMate") }
+                withStyle(SpanStyle(fontFamily = Serif, fontWeight = FontWeight.Medium, fontSize = 20.sp, letterSpacing = (-0.3).sp, color = SM.Charcoal)) { append("StudyMate") }
                 withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = SM.Crimson)) { append(" AI") }
             },
             modifier = Modifier.semantics { contentDescription = "StudyMate AI" },
@@ -90,9 +95,9 @@ fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
         enabled = enabled && !loading,
         modifier = modifier.height(48.dp),
         shape = RoundedCornerShape(8.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = SM.Crimson, contentColor = SM.White),
+        colors = ButtonDefaults.buttonColors(containerColor = SM.Crimson, contentColor = SM.OnCrimson),
     ) {
-        if (loading) CircularProgressIndicator(Modifier.size(18.dp), color = SM.White, strokeWidth = 2.dp)
+        if (loading) CircularProgressIndicator(Modifier.size(18.dp), color = SM.OnCrimson, strokeWidth = 2.dp)
         else icon?.let { Icon(it, null, Modifier.size(18.dp)) }
         if (loading || icon != null) Spacer(Modifier.width(8.dp))
         Text(text)
@@ -137,7 +142,7 @@ fun EmptyState(title: String, description: String? = null, icon: ImageVector? = 
 @Composable
 fun ErrorState(message: String, onRetry: (() -> Unit)? = null) {
     Column(
-        Modifier.fillMaxWidth().background(Color(0xFFFCEBEA), RoundedCornerShape(10.dp)).padding(20.dp),
+        Modifier.fillMaxWidth().background(SM.ErrorSoft, RoundedCornerShape(10.dp)).padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(Icons.Outlined.ErrorOutline, null, tint = SM.Error)
@@ -213,4 +218,27 @@ val ScreenPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom
 @Composable
 fun Screen(content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxSize().background(SM.Ivory), content = content)
+}
+
+
+/** Hauteur de la bande d'en-tête, identique sur toutes les pages (sous la barre d'état). */
+val BandHeight = 76.dp
+
+/**
+ * En-tête de page posé dans la bande cramoisie (prolonge la zone de la barre d'état) :
+ * titre en blanc, flèche de retour et actions éventuelles. Même hauteur sur toutes les pages.
+ */
+@Composable
+fun BandHeader(title: String, subtitle: String? = null, onBack: (() -> Unit)? = null, actions: @Composable RowScope.() -> Unit = {}) {
+    Row(
+        Modifier.fillMaxWidth().height(BandHeight).background(SM.Band).padding(start = if (onBack != null) 4.dp else 20.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Retour", tint = SM.OnCrimson) }
+        Column(Modifier.weight(1f).padding(start = if (onBack != null) 2.dp else 0.dp).semantics { heading() }) {
+            Text(title, style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp, lineHeight = 28.sp), color = SM.OnCrimson, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall.copy(color = SM.OnCrimson.copy(alpha = 0.82f)), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
+        CompositionLocalProvider(LocalContentColor provides SM.OnCrimson) { actions() }
+    }
 }

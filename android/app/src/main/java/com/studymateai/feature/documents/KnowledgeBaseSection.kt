@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.DocumentScanner
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -55,11 +56,11 @@ private suspend fun copyToCache(context: Context, uri: Uri): Pair<File, String> 
 }
 
 /**
- * Base de connaissances d'un dossier : état, trois modes d'ajout (PDF, scan, texte collé)
- * et accès à la génération (QCM, fiches de révision, cartes mémoire).
+ * Documents du cours (base de connaissances) : état et trois modes d'ajout (PDF, scan, texte collé).
+ * La génération se fait depuis les sous-dossiers QCM, Flash-cards et Fiches de révision.
  */
 @Composable
-fun KnowledgeBaseSection(courseId: String, folderId: String?, localDocuments: Int, onScan: () -> Unit, onGenerate: (String) -> Unit) {
+fun KnowledgeBaseSection(courseId: String, folderId: String?, localDocuments: Int, onScan: () -> Unit, onStats: (KnowledgeBaseDto?) -> Unit = {}, onOpenBase: (() -> Unit)? = null) {
     val c = container()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -76,6 +77,9 @@ fun KnowledgeBaseSection(courseId: String, folderId: String?, localDocuments: In
         // Un dossier créé sur l'appareil doit exister sur le serveur avant d'y ajouter des documents.
         runCatching { c.sync.sync() }
         stats = runCatching { c.documents.knowledgeBase(courseId) }.getOrNull()
+        onStats(stats)
+        // Suivi tant que des documents sont en cours d'analyse (OCR…).
+        if ((stats?.processing ?: 0) > 0) { kotlinx.coroutines.delay(3000); refresh++ }
     }
 
     val pickPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -95,7 +99,7 @@ fun KnowledgeBaseSection(courseId: String, folderId: String?, localDocuments: In
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionTitle("Base de connaissances")
+        SectionTitle("Documents du cours")
         val s = stats
         Text(
             when {
@@ -111,18 +115,10 @@ fun KnowledgeBaseSection(courseId: String, folderId: String?, localDocuments: In
             SecondaryButton("Scanner", onScan, icon = Icons.Outlined.DocumentScanner, enabled = online && !busy)
             SecondaryButton("Texte", { pasting = true }, icon = Icons.Outlined.ContentPaste, enabled = online && !busy)
         }
+        if (onOpenBase != null && (s?.ready ?: 0) > 0) SecondaryButton("Voir la base de connaissances", onOpenBase, icon = Icons.Outlined.MenuBook)
         if (busy) Text("Envoi en cours…", style = MaterialTheme.typography.bodySmall)
         message?.let { Text(it, color = SM.Success, style = MaterialTheme.typography.bodySmall) }
         error?.let { ErrorState(it) }
-
-        SectionTitle("Réviser à partir de cette base")
-        val canGenerate = online && (s?.canGenerate ?: (localDocuments > 0))
-        if (!canGenerate && online) Text("Ajoutez au moins un document lisible pour générer un QCM ou des fiches.", style = MaterialTheme.typography.bodySmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SecondaryButton("QCM", { onGenerate("qcm") }, enabled = canGenerate)
-            SecondaryButton("Fiches", { onGenerate("summary") }, enabled = canGenerate)
-            SecondaryButton("Cartes", { onGenerate("flashcards") }, enabled = canGenerate)
-        }
     }
 
     if (pasting) PasteTextDialog(courseId, folderId, onDismiss = { pasting = false }) { title ->

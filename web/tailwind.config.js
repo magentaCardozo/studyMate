@@ -16,8 +16,8 @@ export default {
         danger: { DEFAULT: '#B42318', soft: '#FCEBEA' },
       },
       fontFamily: {
-        serif: ['"Source Serif 4"', '"Libre Baskerville"', 'Georgia', 'serif'],
-        sans: ['Inter', '"Source Sans 3"', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        serif: ['Newsreader', 'Georgia', 'serif'],
+        sans: ['"DM Sans"', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
       },
       borderRadius: { DEFAULT: '8px', lg: '10px', xl: '12px' },
       boxShadow: { card: '0 1px 2px rgba(31,41,55,0.04)', pop: '0 8px 24px rgba(31,41,55,0.12)' },

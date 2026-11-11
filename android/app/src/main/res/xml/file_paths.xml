@@ -2,4 +2,5 @@
 <paths>
     <files-path name="documents" path="documents/" />
     <cache-path name="scans" path="scans/" />
+    <cache-path name="updates" path="updates/" />
 </paths>

@@ -56,7 +56,7 @@ describe('organisation des cours', () => {
     expect(dup.body.data.name).toBe('01 - Introduction (copie)');
   });
 
-  it('déplacer une leçon et un document vers un autre sous-dossier', async () => {
+  it('déplacer une leçon ; un document reste à la racine du dossier', async () => {
     const u = await createUser();
     const course = (await api.post(u, '/courses', { title: 'Programmation Python' })).body.data;
     const a = (await api.post(u, `/courses/${course.id}/folders`, { name: 'A' })).body.data;
@@ -68,7 +68,8 @@ describe('organisation des cours', () => {
     const doc = await uploadText(u, { courseId: course.id, folderId: a.id, fileName: 'notes-amphi.txt', text: 'Une boucle for parcourt une séquence. Une liste est une collection ordonnée.' });
     const moved = await api.patch(u, `/documents/${doc.id}`, { folderId: b.id });
     expect(moved.status).toBe(200);
-    expect(moved.body.data).toMatchObject({ courseId: course.id, folderId: b.id });
+    // Les documents restent à la racine du dossier du cours (les sous-dossiers ne contiennent que du contenu généré).
+    expect(moved.body.data).toMatchObject({ courseId: course.id, folderId: null });
     // Retour à la racine du dossier : le document reste dans le dossier.
     const root = await api.patch(u, `/documents/${doc.id}`, { folderId: null });
     expect(root.body.data).toMatchObject({ courseId: course.id, folderId: null });

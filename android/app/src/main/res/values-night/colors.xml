@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fond de fenêtre et de l'écran de démarrage en thème sombre (même valeur que DarkPalette.ivory). -->
+    <color name="ivory">#141518</color>
+</resources>

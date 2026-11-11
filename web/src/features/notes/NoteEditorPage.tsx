@@ -148,7 +148,7 @@ export default function NoteEditorPage() {
         onChange={(e) => ((dirty.current = true), setTitle(e.target.value))}
         placeholder="Titre de la note"
         aria-label="Titre de la note"
-        className="mb-4 w-full border-0 bg-transparent font-serif text-[28px] font-semibold placeholder:text-muted/50 focus:outline-none focus:ring-0 md:text-[32px]"
+        className="mb-4 w-full border-0 bg-transparent font-serif text-[28px] font-medium placeholder:text-muted/50 focus:outline-none focus:ring-0 md:text-[32px]"
       />
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center gap-0.5 border-b border-line px-2 py-1.5" role="toolbar" aria-label="Mise en forme">

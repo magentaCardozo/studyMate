@@ -2,6 +2,12 @@ package com.studymateai.feature.revision
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import com.studymateai.core.designsystem.ListRow
+import com.studymateai.core.network.ReviewDto
+import androidx.compose.material.icons.outlined.Replay
+import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.studymateai.core.designsystem.BandHeader
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -66,43 +73,117 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
+/**
+ * Onglet Révisions : on n'y génère rien (la génération se fait dans les dossiers). On y termine les
+ * QCM et on y retravaille les questions ratées ; les flash-cards se révisent hors ligne.
+ */
 @Composable
-fun RevisionScreen(onStudy: (String?) -> Unit, onQuiz: (String) -> Unit, onGenerate: () -> Unit) {
+fun RevisionScreen(onStudy: (String?) -> Unit, onQuiz: (String) -> Unit) {
     val c = container()
-    val decks by c.study.decks().collectAsState(emptyList())
+    val scope = rememberCoroutineScope()
+    val online by c.isOnline.collectAsState()
     val counts by c.study.deckCounts().collectAsState(emptyList())
-    val quizzes by c.study.quizzes().collectAsState(emptyList())
+    val localQuizzes by c.study.quizzes().collectAsState(emptyList())
     val totalDue = counts.sumOf { it.due }
+    var review by remember { mutableStateOf<ReviewDto?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf<String?>(null) }
+    var refresh by remember { mutableIntStateOf(0) }
+    LaunchedEffect(online, refresh) {
+        if (!online) return@LaunchedEffect
+        runCatching { c.sync.sync() } // envoie d'abord les QCM passés hors ligne
+        try { review = c.online.review(); error = null } catch (e: Exception) { error = e.toUserMessage() }
+    }
+    // Ouvre un QCM sur l'appareil (il doit être synchronisé localement).
+    fun open(quizId: String) = scope.launch {
+        busy = quizId
+        if (c.study.quiz(quizId) == null) runCatching { c.sync.sync() }
+        busy = null
+        onQuiz(quizId)
+    }
+    fun retry(courseId: String?) = scope.launch {
+        busy = courseId ?: "all"
+        try {
+            val id = c.online.mistakesQuiz(courseId)
+            runCatching { c.sync.sync() }
+            onQuiz(id)
+        } catch (e: Exception) { error = e.toUserMessage() } finally { busy = null }
+    }
+    val r = review
+    Column {
+    BandHeader("Révisions", subtitle = "QCM à terminer et questions ratées")
     LazyColumn(contentPadding = ScreenPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
-            SectionTitle("Révisions")
-            Text("Les cartes et les quiz d’entraînement fonctionnent hors ligne.", style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(8.dp))
-            if (totalDue > 0) PrimaryButton("Réviser $totalDue carte(s)", { onStudy(null) }, Modifier.fillMaxWidth(), icon = Icons.Outlined.Style)
-            Spacer(Modifier.height(6.dp))
-            SecondaryButton("Générer du matériel (en ligne)", onGenerate)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                StatTile("${r?.toFinish?.size ?: "–"}", "QCM à terminer", SM.Crimson, Modifier.weight(1f).fillMaxHeight())
+                StatTile("${r?.mistakes?.size ?: "–"}", if ((r?.mistakes?.size ?: 0) > 1) "questions ratées" else "question ratée", SM.Warning, Modifier.weight(1f).fillMaxHeight())
+                StatTile("$totalDue", if (totalDue > 1) "cartes à revoir" else "carte à revoir", SM.Charcoal, Modifier.weight(1f).fillMaxHeight())
+            }
         }
-        item { SectionTitle("Cartes mémoire") }
-        if (decks.isEmpty()) item { EmptyState("Aucun paquet de cartes", "Générez des cartes depuis une leçon (connexion requise).", Icons.Outlined.Style) }
-        items(decks, key = { it.id }) { d ->
-            val count = counts.find { it.deckId == d.id }
-            SmCard(onClick = { onStudy(d.id) }) {
-                Text(d.title, style = MaterialTheme.typography.titleSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("${count?.total ?: 0} cartes", style = MaterialTheme.typography.bodySmall)
-                    if ((count?.due ?: 0) > 0) StatusChip("${count!!.due} à revoir", SM.Crimson)
-                    if (d.origin == "ai") StatusChip("Généré")
+        if (!online) item { Notice("Hors ligne : les QCM et les cartes déjà synchronisés restent utilisables ; la liste des erreurs se met à jour à la reconnexion.") }
+        error?.let { e -> item { ErrorState(e) { refresh++ } } }
+
+        // 1. QCM à terminer (hors ligne : QCM de l'appareil jamais faits)
+        item { SectionTitle("QCM à terminer") }
+        val toFinish = r?.toFinish
+        if (toFinish == null && !online) {
+            if (localQuizzes.isEmpty()) item { Text("Aucun QCM sur l’appareil.", style = MaterialTheme.typography.bodySmall) }
+            items(localQuizzes.filter { it.offlineEligible }, key = { "l-" + it.id }) { q ->
+                SmCard(onClick = { onQuiz(q.id) }) { ListRow(q.title, "Disponible hors ligne", Icons.Outlined.Quiz) }
+            }
+        } else if (toFinish != null && toFinish.isEmpty()) {
+            item { Text("Tous vos QCM sont terminés.", style = MaterialTheme.typography.bodySmall) }
+        } else if (toFinish != null) {
+            items(toFinish, key = { it.quizId }) { t ->
+                SmCard(onClick = { open(t.quizId) }) {
+                    Text(t.title, style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        listOfNotNull(t.course?.title ?: if (t.isReview) "Rattrapage" else null, if (t.isMockExam) "Examen blanc · en ligne" else null, if (t.status == "in_progress") "commencé sur le web · ${t.answered}/${t.totalQuestions}" else "jamais commencé").joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (t.status == "in_progress" && t.totalQuestions > 0) {
+                        Spacer(Modifier.height(6.dp))
+                        LinearProgressIndicator(progress = { t.answered.toFloat() / t.totalQuestions }, modifier = Modifier.fillMaxWidth(), color = SM.Crimson, trackColor = SM.Border)
+                    }
+                    if (busy == t.quizId) Text("Ouverture…", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
-        item { SectionTitle("Quiz") }
-        if (quizzes.isEmpty()) item { Text("Aucun quiz pour le moment.", style = MaterialTheme.typography.bodySmall) }
-        items(quizzes, key = { it.id }) { q ->
-            SmCard(onClick = { onQuiz(q.id) }) {
-                Text(q.title, style = MaterialTheme.typography.titleSmall)
-                Text(if (q.offlineEligible) "Entraînement · disponible hors ligne" else "Mode examen · en ligne (version web)", style = MaterialTheme.typography.bodySmall)
+
+        // 2. Questions ratées
+        item { SectionTitle("Questions ratées") }
+        val mistakes = r?.mistakes
+        if (mistakes != null && mistakes.isEmpty()) item { Text("Aucune question ratée : bravo.", style = MaterialTheme.typography.bodySmall) }
+        if (!mistakes.isNullOrEmpty()) {
+            item {
+                PrimaryButton(if (busy == "all") "Préparation…" else "Retravailler ${mistakes.size} question${if (mistakes.size > 1) "s" else ""}", { retry(null) }, Modifier.fillMaxWidth(), enabled = online && busy == null, icon = Icons.Outlined.Replay)
+                Text("Une question quitte cette liste dès que vous y répondez juste.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+            }
+            mistakes.groupBy { it.course?.title ?: "Sans dossier" }.forEach { (course, list) ->
+                item(key = "c-$course") { Text("${course.uppercase()} · ${list.size}", style = MaterialTheme.typography.labelMedium, color = SM.Muted, modifier = Modifier.padding(top = 6.dp)) }
+                items(list, key = { it.questionId }) { m ->
+                    SmCard {
+                        Text(m.question, style = MaterialTheme.typography.bodyMedium)
+                        Text("${m.quiz.title} · ratée ${if (m.wrongCount > 1) "${m.wrongCount} fois" else "une fois"}", style = MaterialTheme.typography.bodySmall, color = SM.Muted)
+                    }
+                }
             }
         }
+
+        // 3. Flash-cards (hors ligne)
+        if (totalDue > 0) item {
+            SectionTitle("Flash-cards")
+            PrimaryButton("Réviser $totalDue carte(s)", { onStudy(null) }, Modifier.fillMaxWidth(), icon = Icons.Outlined.Style)
+        }
+    }
+    }
+}
+
+@Composable
+private fun StatTile(value: String, label: String, tint: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    SmCard(modifier) {
+        Text(value, style = MaterialTheme.typography.headlineSmall, color = tint)
+        Text(label, style = MaterialTheme.typography.bodySmall, maxLines = 2)
     }
 }
 
@@ -197,7 +278,7 @@ fun QuizScreen(quizId: String, onBack: () -> Unit) {
                 if (submitted) item {
                     SmCard {
                         Text("Résultat : ${score.toInt()} / ${qs.sumOf { it.points }.toInt()}", style = MaterialTheme.typography.titleLarge)
-                        Text("Résultat enregistré sur l’appareil (entraînement hors ligne).", style = MaterialTheme.typography.bodySmall)
+                        Text("Les questions ratées apparaîtront dans Révisions (dès la prochaine synchronisation si vous êtes hors ligne).", style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 items(qs, key = { it.id }) { q ->
@@ -216,6 +297,19 @@ fun QuizScreen(quizId: String, onBack: () -> Unit) {
                                     }
                                 }
                             }
+                            "MULTIPLE_CHOICE" -> {
+                                Text("Plusieurs réponses possibles", style = MaterialTheme.typography.bodySmall.copy(color = SM.Muted))
+                                options(q).forEachIndexed { i, o ->
+                                    @Suppress("UNCHECKED_CAST")
+                                    val chosen = (answers[q.id] as? List<Double>).orEmpty()
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(checked = i.toDouble() in chosen, onCheckedChange = { on ->
+                                            if (!submitted) answers[q.id] = (if (on) chosen + i.toDouble() else chosen - i.toDouble()).sorted()
+                                        })
+                                        Text(o)
+                                    }
+                                }
+                            }
                             "SHORT_ANSWER", "FILL_BLANK" -> OutlinedTextField((answers[q.id] as? String) ?: "", { if (!submitted) answers[q.id] = it }, label = { Text("Votre réponse") }, modifier = Modifier.fillMaxWidth())
                             else -> Text("Type de question disponible sur la version web.", style = MaterialTheme.typography.bodySmall)
                         }
@@ -230,7 +324,10 @@ fun QuizScreen(quizId: String, onBack: () -> Unit) {
                     PrimaryButton("Remettre", {
                         score = qs.sumOf { QuizScoring.score(it.questionType, correctOf(it), answers[it.id]) * it.points }
                         submitted = true
-                        scope.launch { c.study.saveLocalQuizResult(quizId, score, qs.sumOf { it.points }) }
+                        scope.launch {
+                            c.study.saveQuizAttempt(quizId, score, qs.sumOf { it.points }, answers.toMap())
+                            runCatching { c.sync.sync() } // hors ligne : envoyé à la prochaine synchronisation
+                        }
                     }, Modifier.fillMaxWidth())
                 }
             }
@@ -243,7 +340,8 @@ fun QuizScreen(quizId: String, onBack: () -> Unit) {
  * Nécessite une connexion (aucune IA sur l'appareil).
  */
 @Composable
-fun GenerateDialog(courseId: String?, folderId: String?, lessonId: String?, initialKind: String = "qcm", onDismiss: () -> Unit) {
+/** kinds : types proposés (un sous-dossier n'offre que le sien) ; onGenerated : rafraîchir le sous-dossier. */
+fun GenerateDialog(courseId: String?, folderId: String?, lessonId: String?, initialKind: String = "qcm", kinds: List<String>? = null, onGenerated: () -> Unit = {}, onDismiss: () -> Unit) {
     val c = container()
     val scope = rememberCoroutineScope()
     val online by c.isOnline.collectAsState()
@@ -253,15 +351,16 @@ fun GenerateDialog(courseId: String?, folderId: String?, lessonId: String?, init
     var error by remember { mutableStateOf<String?>(null) }
     val courses by c.study.courses().collectAsState(emptyList())
     var selectedCourse by remember { mutableStateOf(courseId) }
+    val labels = listOf("qcm" to "Questionnaire à choix multiple (QCM)", "summary" to "Fiches de révision", "flashcards" to "Flash-cards").filter { kinds == null || it.first in kinds }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SM.White,
-        title = { Text("Réviser à partir de la base") },
+        title = { Text(if (labels.size == 1) "Générer : ${labels[0].second}" else "Réviser à partir de la base") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (!online) Notice("Connexion requise : la génération utilise le serveur. Aucun modèle d’IA ne fonctionne sur l’appareil.")
                 Text("Généré uniquement à partir des documents du dossier.", style = MaterialTheme.typography.bodySmall)
-                listOf("qcm" to "Questionnaire à choix multiple (QCM)", "summary" to "Fiches de révision", "flashcards" to "Cartes mémoire").forEach { (id, label) ->
+                if (labels.size > 1) labels.forEach { (id, label) ->
                     Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(kind == id, { kind = id }); Text(label) }
                 }
                 if (courseId == null && folderId == null && lessonId == null) {
@@ -285,8 +384,9 @@ fun GenerateDialog(courseId: String?, folderId: String?, lessonId: String?, init
                             else -> c.online.qcm(course, folderId, lessonId)
                         }
                         runCatching { c.sync.sync() }
+                        onGenerated()
                         message = when (kind) {
-                            "summary" -> "Fiches de révision générées : consultez-les sur la version web."
+                            "summary" -> "Fiche de révision générée : elle est rangée dans le sous-dossier « Fiches de révision »."
                             "qcm" -> "QCM généré : disponible dans Révisions, même hors ligne."
                             else -> "Cartes générées : disponibles dans Révisions, même hors ligne."
                         }

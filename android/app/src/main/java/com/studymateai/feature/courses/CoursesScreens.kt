@@ -1,5 +1,19 @@
 package com.studymateai.feature.courses
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.DocumentScanner
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
@@ -42,6 +56,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.studymateai.core.designsystem.BandHeader
 import com.studymateai.core.designsystem.EmptyState
 import com.studymateai.core.designsystem.ListRow
 import com.studymateai.core.designsystem.PrimaryButton
@@ -54,6 +69,9 @@ import com.studymateai.core.designsystem.StatusChip
 import com.studymateai.feature.common.DOC_STATUS
 import com.studymateai.feature.common.SOURCE
 import com.studymateai.feature.documents.KnowledgeBaseSection
+import com.studymateai.feature.revision.RevisionFoldersSection
+import com.studymateai.feature.revision.Subfolder
+import com.studymateai.core.network.KnowledgeBaseDto
 import com.studymateai.feature.common.container
 import com.studymateai.feature.common.formatSize
 import kotlinx.coroutines.launch
@@ -75,14 +93,8 @@ fun NameDialog(title: String, label: String, onDismiss: () -> Unit, onConfirm: (
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackBar(title: String, onBack: () -> Unit, actions: @Composable () -> Unit = {}) {
-    TopAppBar(
-        title = { Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1) },
-        navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Retour") } },
-        actions = { actions() },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = SM.Ivory),
-        // Les marges système sont déjà appliquées par le Scaffold principal.
-        windowInsets = WindowInsets(0, 0, 0, 0),
-    )
+    // Titre des écrans de détail dans la bande cramoisie du haut.
+    BandHeader(title, onBack = onBack) { actions() }
 }
 
 @Composable
@@ -93,10 +105,12 @@ fun CoursesScreen(onCourse: (String) -> Unit) {
     var query by remember { mutableStateOf("") }
     var creating by remember { mutableStateOf(false) }
     val filtered = courses?.filter { query.isBlank() || it.title.contains(query, true) || (it.code ?: "").contains(query, true) }
+    Column {
+    BandHeader("Mes dossiers", subtitle = "Un dossier par cours") {
+        TextButton(onClick = { creating = true }) { Text("+ Dossier", color = SM.OnCrimson) }
+    }
     LazyColumn(contentPadding = ScreenPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
-            SectionTitle("Mes dossiers") { TextButton(onClick = { creating = true }) { Text("+ Dossier", color = SM.Crimson) } }
-            Text("Un dossier par cours : ses documents forment la base de connaissances de vos QCM et fiches.", style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(query, { query = it }, placeholder = { Text("Rechercher un dossier") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true, modifier = Modifier.fillMaxWidth())
         }
         when {
@@ -118,6 +132,7 @@ fun CoursesScreen(onCourse: (String) -> Unit) {
             }
         }
     }
+    }
     if (creating) NameDialog("Nouveau dossier", "Nom du dossier (ex. Statistique)", { creating = false }) { title ->
         creating = false
         scope.launch { onCourse(c.study.createCourse(title, null)) }
@@ -125,69 +140,52 @@ fun CoursesScreen(onCourse: (String) -> Unit) {
 }
 
 /**
- * Contenu d'un dossier ou d'un sous-dossier : base de connaissances puis organisation
- * (arborescence générée à partir des données locales). folderId = null → racine du dossier.
+ * Dossier d'un cours : les documents (seul endroit où l'on dépose des PDF) puis les trois
+ * sous-dossiers fixes QCM, Flash-cards et Fiches de révision.
  */
 @Composable
-fun CourseContentScreen(courseId: String, folderId: String?, onBack: () -> Unit, onFolder: (String) -> Unit, onLesson: (String) -> Unit, onDocument: (String) -> Unit, onNewNote: () -> Unit, onScan: () -> Unit, onGenerate: (String) -> Unit) {
+fun CourseContentScreen(courseId: String, onBack: () -> Unit, onDocument: (String) -> Unit, onScan: () -> Unit, onOpenBase: () -> Unit, refreshKey: Int, onGenerate: (Subfolder) -> Unit, onOpen: (Subfolder, String) -> Unit) {
     val c = container()
-    val scope = rememberCoroutineScope()
     val course by c.study.course(courseId).collectAsState(null)
-    val folders by c.study.folders(courseId).collectAsState(emptyList())
-    val lessons by c.study.lessons(courseId).collectAsState(emptyList())
     val documents by c.study.documents(courseId = courseId).collectAsState(emptyList())
-    var dialog by remember { mutableStateOf<String?>(null) }
-    val current = folders.find { it.id == folderId }
-    val subfolders = folders.filter { it.parentFolderId == folderId }
-    val here = lessons.filter { it.folderId == folderId }
-    val docsHere = documents.filter { it.folderId == folderId }
-    // Fil d'Ariane : Dossier › Sous-dossier › …
-    val trail = generateSequence(current) { f -> folders.find { it.id == f.parentFolderId } }.toList().reversed()
+    var stats by remember { mutableStateOf<KnowledgeBaseDto?>(null) }
 
     Column {
-        BackBar(current?.name ?: course?.title ?: "", onBack)
+        BackBar(course?.title ?: "", onBack)
         LazyColumn(contentPadding = ScreenPadding, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            item {
-                Text((listOf(course?.title ?: "") + trail.map { it.name }).joinToString(" › "), style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(8.dp))
-                KnowledgeBaseSection(courseId, folderId, localDocuments = if (folderId == null) documents.size else docsHere.size, onScan = onScan, onGenerate = onGenerate)
-            }
-            if (docsHere.isNotEmpty()) item { SectionTitle("Documents") }
-            items(docsHere, key = { "doc-" + it.id }) { d ->
-                SmCard(onClick = { onDocument(d.id) }) {
-                    ListRow(d.fileName, "${SOURCE[d.source] ?: "Fichier"} · ${formatSize(d.fileSize)} · ${DOC_STATUS[d.processingStatus]}${if (d.localPath != null) " · Hors ligne" else ""}", Icons.Outlined.Description)
-                }
-            }
-            item {
-                SectionTitle("Organisation")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    SecondaryButton("Sous-dossier", { dialog = "folder" }, icon = Icons.Outlined.CreateNewFolder)
-                    SecondaryButton("Leçon", { dialog = "lesson" }, icon = Icons.Outlined.PostAdd)
-                    SecondaryButton("Note", onNewNote, icon = Icons.Outlined.NoteAdd)
-                }
-            }
-            if (subfolders.isNotEmpty()) item { SectionTitle("Sous-dossiers") }
-            items(subfolders, key = { it.id }) { f ->
-                val n = lessons.count { it.folderId == f.id }
-                SmCard(onClick = { onFolder(f.id) }) {
-                    Row { Icon(Icons.Outlined.Folder, null, tint = SM.Crimson); Spacer(Modifier.padding(6.dp)); Column { Text(f.name, style = MaterialTheme.typography.titleSmall); Text("$n leçon(s)", style = MaterialTheme.typography.bodySmall) } }
-                }
-            }
-            if (here.isNotEmpty()) item { SectionTitle("Leçons") }
-            items(here, key = { it.id }) { l ->
-                SmCard(onClick = { onLesson(l.id) }) {
-                    Row {
-                        Icon(if (l.status == "COMPLETED") Icons.Outlined.CheckCircle else if (l.status == "IN_PROGRESS") Icons.Outlined.TaskAlt else Icons.Outlined.Circle, null, tint = if (l.status == "COMPLETED") SM.Success else SM.Muted)
-                        Spacer(Modifier.padding(6.dp))
-                        Text(l.title, style = MaterialTheme.typography.titleSmall)
+            item { KnowledgeBaseSection(courseId, null, localDocuments = documents.size, onScan = onScan, onStats = { stats = it }, onOpenBase = onOpenBase) }
+            // Documents regroupés dans une seule carte, icône selon le mode d'ajout.
+            if (documents.isNotEmpty()) item {
+                Surface(shape = RoundedCornerShape(12.dp), color = SM.White, border = BorderStroke(1.dp, SM.Border)) {
+                    Column {
+                        documents.forEachIndexed { i, d ->
+                            if (i > 0) HorizontalDivider(color = SM.Border)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable { onDocument(d.id) }.padding(horizontal = 14.dp, vertical = 12.dp),
+                            ) {
+                                Box(Modifier.size(36.dp).background(SM.Crimson.copy(alpha = 0.08f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        when (d.source) { "text" -> Icons.Outlined.ContentPaste; "scan" -> Icons.Outlined.DocumentScanner; else -> if (d.mimeType.startsWith("image/")) Icons.Outlined.Image else Icons.Outlined.PictureAsPdf },
+                                        null, tint = SM.Crimson, modifier = Modifier.size(19.dp),
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(d.fileName, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        listOfNotNull(SOURCE[d.source] ?: "Fichier", formatSize(d.fileSize), DOC_STATUS[d.processingStatus].takeIf { d.processingStatus != "READY" }, if (d.localPath != null) "Hors ligne" else null).joinToString(" · "),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (d.processingStatus == "FAILED") SM.Error else SM.Muted,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
-            item { HorizontalDivider(color = SM.Border) }
+            item { HorizontalDivider(color = SM.Border, modifier = Modifier.padding(vertical = 8.dp)) }
+            item { RevisionFoldersSection(courseId, canGenerate = stats?.canGenerate ?: documents.isNotEmpty(), refreshKey = refreshKey, onGenerate = onGenerate, onOpen = onOpen) }
         }
-    }
-    when (dialog) {
-        "folder" -> NameDialog("Nouveau sous-dossier", "Nom du sous-dossier", { dialog = null }) { name -> dialog = null; scope.launch { c.study.createFolder(courseId, folderId, name) } }
-        "lesson" -> NameDialog("Nouvelle leçon", "Titre de la leçon", { dialog = null }) { title -> dialog = null; scope.launch { onLesson(c.study.createLesson(courseId, folderId, title)) } }
     }
 }

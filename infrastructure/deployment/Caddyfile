@@ -8,7 +8,11 @@
 	# Application Android de test, téléchargeable depuis le téléphone.
 	handle_path /telecharger/* {
 		root * /srv/downloads
-		header Content-Disposition attachment
+		# Manifeste de mise à jour : toujours relu (jamais servi depuis un cache).
+		@manifest path /version.json
+		header @manifest Cache-Control "no-cache"
+		@apk path *.apk
+		header @apk Content-Disposition attachment
 		file_server
 	}
 	handle {

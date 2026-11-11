@@ -3,10 +3,17 @@
 FROM node:22-bookworm-slim AS base
 ENV NEXT_TELEMETRY_DISABLED=1 NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false
 WORKDIR /app
-# openssl : moteur Prisma ; poppler + tesseract : extraction de texte et OCR
+# openssl : moteur Prisma ; poppler + tesseract : rendu et OCR ; python3 : méthode d'extraction locale
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl ca-certificates poppler-utils tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng \
+  && apt-get install -y --no-install-recommends openssl ca-certificates poppler-utils tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng tesseract-ocr-osd python3 python3-pip \
+  && pip3 install --no-cache-dir --break-system-packages pypdf==5.4.0 pymupdf==1.25.5 \
   && rm -rf /var/lib/apt/lists/*
+# Méthode d'extraction OCR (backend/ocr) avec un tessdata local (fra, eng, osd) et un cache par empreinte MD5.
+COPY backend/ocr /app/ocr
+RUN mkdir -p /app/ocr/tessdata /app/cache_ocr \
+  && cp /usr/share/tesseract-ocr/5/tessdata/fra.traineddata /usr/share/tesseract-ocr/5/tessdata/eng.traineddata /usr/share/tesseract-ocr/5/tessdata/osd.traineddata /app/ocr/tessdata/ \
+  && chown -R node:node /app/cache_ocr
+ENV OCR_SCRIPT=/app/ocr/studymate_ocr.py OCR_CACHE_DIR=/app/cache_ocr STUDYMATE_TESSDATA=/app/ocr/tessdata
 
 FROM base AS build
 COPY backend/package.json backend/package-lock.json ./

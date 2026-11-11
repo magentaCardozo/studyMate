@@ -29,7 +29,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   return (
     <div className="card p-4">
       <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-1 font-serif text-[26px] font-semibold">{value}</p>
+      <p className="mt-1 font-serif text-[26px] font-medium">{value}</p>
       {hint && <p className="meta">{hint}</p>}
     </div>
   );

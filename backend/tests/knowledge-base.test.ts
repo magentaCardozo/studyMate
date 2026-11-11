@@ -53,6 +53,25 @@ describe('base de connaissances par dossier', () => {
     // Fiche de révision (résumé structuré) et cartes mémoire.
     expect((await api.post(u, '/ai/summaries', { courseId: folder.id, length: 'standard' })).status).toBe(201);
     expect((await api.post(u, '/ai/flashcards', { courseId: folder.id, count: 5 })).status).toBe(201);
+
+    // Les trois sous-dossiers du dossier listent le contenu généré, du plus récent au plus ancien.
+    await api.post(u, '/ai/quizzes', { courseId: folder.id, count: 3, types: ['SINGLE_CHOICE'] }).expect(201);
+    const rev = (await api.get(u, `/courses/${folder.id}/revisions`)).body.data;
+    expect(rev.qcm).toHaveLength(2);
+    expect(new Date(rev.qcm[0].createdAt).getTime()).toBeGreaterThanOrEqual(new Date(rev.qcm[1].createdAt).getTime());
+    expect(rev.qcm[0].questions).toBeGreaterThan(0);
+    expect(rev.fiches).toHaveLength(1);
+    expect(rev.flashcards).toHaveLength(1);
+    expect(rev.flashcards[0].cards).toBeGreaterThan(0);
+  });
+
+  it("les documents se déposent à la racine du dossier, jamais dans un sous-dossier", async () => {
+    const u = await createUser();
+    const folder = (await api.post(u, '/courses', { title: 'Statistique' })).body.data;
+    const sub = (await api.post(u, `/courses/${folder.id}/folders`, { name: 'Ancien sous-dossier' })).body.data;
+    const doc = (await api.post(u, '/documents/text', { title: 'Notes', content: PASTED, folderId: sub.id })).body.data;
+    expect(doc).toMatchObject({ courseId: folder.id, folderId: null });
+    expect((await api.get(await createUser(), `/courses/${folder.id}/revisions`)).status).toBe(404);
   });
 
   it('refuse un texte collé trop court et la base d’un autre étudiant', async () => {

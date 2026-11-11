@@ -43,5 +43,5 @@ fun formatSize(bytes: Long): String = when {
 
 val ACTIVITY = mapOf("lesson" to "Étude de leçon", "flashcards" to "Cartes mémoire", "quiz" to "Quiz", "mock_exam" to "Examen blanc", "summary" to "Résumé", "free" to "Révision libre")
 val LESSON_STATUS = mapOf("NOT_STARTED" to "À commencer", "IN_PROGRESS" to "En cours", "COMPLETED" to "Terminée")
-val SOURCE = mapOf("file" to "PDF / fichier", "scan" to "Scan", "text" to "Texte collé")
+val SOURCE = mapOf("file" to "Fichier", "scan" to "Scan", "text" to "Texte collé")
 val DOC_STATUS = mapOf("PENDING_UPLOAD" to "Import en attente", "UPLOADED" to "Importé", "QUEUED" to "En file d’attente", "PROCESSING" to "Analyse en cours", "READY" to "Prêt", "FAILED" to "Échec de l’analyse")

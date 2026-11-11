@@ -251,7 +251,7 @@ components:
       required: [opId, entity, action, id]
       properties:
         opId: { type: string, format: uuid, description: Clé d'idempotence }
-        entity: { type: string, enum: [note, lesson, course, folder, flashcard, flashcard_review, session] }
+        entity: { type: string, enum: [note, lesson, course, folder, flashcard, flashcard_review, session, quiz_result] }
         action: { type: string, enum: [create, update, delete] }
         id: { type: string, format: uuid }
         data: { type: object }
@@ -380,6 +380,51 @@ paths:
       tags: [Matières]
       summary: 'État de la base de connaissances du dossier (documents par source et par état, volume de texte, canGenerate)'
       responses: { '200': { description: OK } }
+  /review:
+    get:
+      tags: [Révision]
+      summary: 'Onglet Révisions : QCM à terminer (tentative en cours ou jamais commencés), questions ratées (dernière réponse fausse), flash-cards à réviser'
+      responses:
+        '200':
+          description: 'JSON { toFinish: [{ quizId, title, course, isMockExam, isReview, totalQuestions, status: in_progress|not_started, attemptId, answered, startedAt }], mistakes: [{ questionId, question, quiz, course, wrongCount, lastAnsweredAt }], cards: { due, new } }'
+  /review/mistakes-quiz:
+    post:
+      tags: [Révision]
+      summary: 'Crée un QCM de rattrapage (hors dossier, mode entraînement) avec les questions ratées ; les copies gardent originQuestionId. Remplace un rattrapage précédent resté sans réponse.'
+      requestBody: { content: { application/json: { schema: { type: object, properties: { courseId: { type: string, format: uuid }, questionIds: { type: array, items: { type: string, format: uuid } } } } } } }
+      responses:
+        '201': { description: '{ id, title, questions }' }
+        '400': { description: 'NO_MISTAKES : aucune question ratée' }
+  /courses/{id}/knowledge-base/content:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Matières]
+      summary: 'Base de connaissances réunie : texte extrait de tous les documents prêts du dossier (fichiers, scans, textes collés), page par page'
+      parameters:
+        - { name: format, in: query, required: false, schema: { type: string, enum: [md] }, description: 'md : téléchargement Markdown' }
+      responses:
+        '200':
+          description: 'JSON { courseId, title, characters, documents: [{ id, fileName, source, pageCount, createdAt, corrected, warnings, pages: [{ page, text, source, aVerifier, texteImages }] }], pending } ou fichier text/markdown'
+  /courses/{id}/revisions:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Matières]
+      summary: 'Les trois sous-dossiers fixes du dossier (QCM, Flash-cards, Fiches de révision), contenu du plus récent au plus ancien'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      courseId: { type: string, format: uuid }
+                      qcm: { type: array, items: { type: object, properties: { id: { type: string }, title: { type: string }, createdAt: { type: string, format: date-time }, questions: { type: integer }, lastScore: { type: integer, nullable: true } } } }
+                      flashcards: { type: array, items: { type: object, properties: { id: { type: string }, title: { type: string }, createdAt: { type: string, format: date-time }, cards: { type: integer } } } }
+                      fiches: { type: array, items: { type: object, properties: { id: { type: string }, title: { type: string }, createdAt: { type: string, format: date-time }, length: { type: string } } } }
   /courses/{id}/tree:
     parameters: [{ $ref: '#/components/parameters/Id' }]
     get: { tags: [Matières], summary: 'Arborescence dossiers / leçons', responses: { '200': { description: 'Arbre', content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { folders: { type: array, items: { $ref: '#/components/schemas/TreeFolder' } }, lessons: { type: array, items: { type: object } } } } } } } } } } }

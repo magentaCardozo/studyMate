@@ -18,9 +18,17 @@ export type GenerateKind = 'qcm' | 'summary' | 'flashcards' | 'quiz' | 'mock';
 export const useAiStatus = () => useQuery({ queryKey: ['ai-status'], queryFn: () => api.get<AiStatus>('/ai/status'), staleTime: 60_000 });
 
 /** Bandeau d'information honnête sur le fournisseur d'IA réellement configuré. */
-export function AiStatusNotice({ status }: { status?: AiStatus }) {
+export function AiStatusNotice({ status, compact = false }: { status?: AiStatus; compact?: boolean }) {
   if (!status) return null;
   if (!status.configured) return <Notice tone="danger" title="IA indisponible">Aucun fournisseur d’IA n’est configuré sur ce serveur. Les fonctions de révision manuelles restent disponibles.</Notice>;
+  // Version discrète pour les pages de consultation : l'information complète reste dans la fenêtre de génération.
+  if (status.demoMode && compact)
+    return (
+      <p className="inline-flex items-center gap-2 rounded-full border border-warning/30 bg-warning/10 px-3 py-1 text-[12.5px] text-charcoal">
+        <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />
+        Mode démonstration : contenu extrait de vos documents, sans modèle de langage.
+      </p>
+    );
   if (status.demoMode)
     return (
       <Notice tone="warning" title="Mode démonstration">
@@ -33,13 +41,17 @@ export function AiStatusNotice({ status }: { status?: AiStatus }) {
 const KINDS: { id: GenerateKind; label: string; icon: React.ReactNode; hint: string }[] = [
   { id: 'qcm', label: 'QCM', icon: <ListChecks size={17} />, hint: 'Questionnaire à choix multiple' },
   { id: 'summary', label: 'Fiches de révision', icon: <FileText size={17} />, hint: 'Notions, définitions, formules' },
-  { id: 'flashcards', label: 'Cartes mémoire', icon: <Layers size={17} />, hint: 'Révision espacée' },
+  { id: 'flashcards', label: 'Flash-cards', icon: <Layers size={17} />, hint: 'Cartes mémoire, révision espacée' },
   { id: 'mock', label: 'Examen blanc', icon: <Timer size={17} />, hint: 'Minuté, corrigé après remise' },
 ];
 
 const QCM_TYPES = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE'];
 
-export function GenerateDialog({ open, onClose, scope, scopeLabel, initialKind = 'summary' }: { open: boolean; onClose: () => void; scope: Scope; scopeLabel: string; initialKind?: GenerateKind }) {
+/**
+ * kinds : types proposés (un sous-dossier n'offre que le sien) ;
+ * onGenerated : rester sur la page appelante (sous-dossier) au lieu d'ouvrir le contenu généré.
+ */
+export function GenerateDialog({ open, onClose, scope, scopeLabel, initialKind = 'summary', kinds, onGenerated }: { open: boolean; onClose: () => void; scope: Scope; scopeLabel: string; initialKind?: GenerateKind; kinds?: GenerateKind[]; onGenerated?: (kind: GenerateKind, id: string) => void }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
@@ -82,23 +94,25 @@ export function GenerateDialog({ open, onClose, scope, scopeLabel, initialKind =
       };
     },
     onSuccess: ({ path, data }) => {
-      for (const k of ['summaries', 'decks', 'quizzes', 'lesson', 'ai-status', 'revision']) qc.invalidateQueries({ queryKey: [k] });
+      for (const k of ['summaries', 'decks', 'quizzes', 'lesson', 'ai-status', 'revision', 'revisions']) qc.invalidateQueries({ queryKey: [k] });
       toast.show('Contenu généré.');
       onClose();
-      navigate(path + data.id);
+      if (onGenerated) onGenerated(kind, data.id);
+      else navigate(path + data.id);
     },
     onError: (e) => setError(e instanceof ApiError ? e : new ApiError(0, 'ERROR', 'Erreur inattendue.')),
   });
 
   const toggleType = (t: string) => setTypes((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
   const s = status.data;
+  const shownKinds = kinds ? KINDS.filter((k) => kinds.includes(k.id)) : KINDS;
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
       size="lg"
-      title="Exploiter la base de connaissances"
+      title={shownKinds.length === 1 ? `Générer : ${shownKinds[0].label}` : 'Exploiter la base de connaissances'}
       description={`Généré uniquement à partir des documents de : ${scopeLabel}`}
       footer={
         <>
@@ -110,8 +124,9 @@ export function GenerateDialog({ open, onClose, scope, scopeLabel, initialKind =
       }
     >
       <div className="space-y-5">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Type de contenu">
-          {KINDS.map((k) => (
+        {shownKinds.length > 1 && (
+        <div className={`grid grid-cols-2 gap-2 ${shownKinds.length > 2 ? 'sm:grid-cols-4' : ''}`} role="radiogroup" aria-label="Type de contenu">
+          {shownKinds.map((k) => (
             <button key={k.id} type="button" role="radio" aria-checked={kind === k.id} onClick={() => setKind(k.id)} className={`rounded-md border p-3 text-left transition-colors ${kind === k.id ? 'border-crimson bg-crimson-soft' : 'border-line hover:border-charcoal/30'}`}>
               <span className={kind === k.id ? 'text-crimson' : 'text-muted'}>{k.icon}</span>
               <p className="mt-1 text-sm font-medium">{k.label}</p>
@@ -119,6 +134,7 @@ export function GenerateDialog({ open, onClose, scope, scopeLabel, initialKind =
             </button>
           ))}
         </div>
+        )}
 
         <AiStatusNotice status={s} />
         {s?.requiresConsent && (

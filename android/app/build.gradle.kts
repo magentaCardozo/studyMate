@@ -7,6 +7,10 @@ plugins {
 }
 
 val apiUrl = (project.findProperty("studymate.apiUrl") as String?) ?: "http://10.0.2.2:4000/"
+// Mises à jour : manifeste publié à côté de l'APK (voir scripts/build-apk.sh et le déploiement).
+val updateUrl = (project.findProperty("studymate.updateUrl") as String?) ?: "${apiUrl}telecharger/version.json"
+val appVersionCode = (project.findProperty("studymate.versionCode") as String?)?.toInt() ?: 1
+val appVersionName = (project.findProperty("studymate.versionName") as String?) ?: "0.1.0"
 
 android {
     namespace = "com.studymateai"
@@ -16,11 +20,12 @@ android {
         applicationId = "com.studymateai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
         // Aucune clé d'IA ni secret n'est embarqué : seule l'URL publique de l'API.
         buildConfigField("String", "API_BASE_URL", "\"$apiUrl\"")
-        resourceConfigurations += listOf("fr", "en")
+        buildConfigField("String", "UPDATE_URL", "\"$updateUrl\"")
+        resourceConfigurations += listOf("fr")
     }
 
     buildTypes {

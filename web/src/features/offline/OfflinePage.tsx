@@ -16,7 +16,7 @@ export default function OfflinePage() {
           {online ? 'Toutes les fonctions sont disponibles.' : 'Les pages déjà ouvertes restent consultables, mais les nouvelles données, l’IA et l’import nécessitent une connexion.'}
         </Notice>
         <section className="card p-5">
-          <h2 className="flex items-center gap-2 font-serif text-lg font-semibold"><Smartphone size={18} className="text-crimson" /> Application Android : hors ligne complet</h2>
+          <h2 className="flex items-center gap-2 font-serif text-lg font-medium"><Smartphone size={18} className="text-crimson" /> Application Android : hors ligne complet</h2>
           <ul className="mt-3 list-disc space-y-1.5 pl-5 text-[14.5px]">
             <li>Dossiers, sous-dossiers, leçons et notes enregistrés sur l’appareil.</li>
             <li>Documents téléchargés pour la lecture hors ligne (option « Wi-Fi uniquement »).</li>
@@ -25,12 +25,12 @@ export default function OfflinePage() {
           </ul>
         </section>
         <section className="card p-5">
-          <h2 className="flex items-center gap-2 font-serif text-lg font-semibold"><Wifi size={18} className="text-crimson" /> Version web</h2>
+          <h2 className="flex items-center gap-2 font-serif text-lg font-medium"><Wifi size={18} className="text-crimson" /> Version web</h2>
           <p className="mt-2 text-[14.5px]">La version web fonctionne en ligne. Les données récemment consultées restent en mémoire pendant la session et vos réponses de quiz sont conservées sur l’appareil en cas de coupure, puis envoyées dès le retour de la connexion. Le web ne propose pas encore de bibliothèque hors ligne complète.</p>
           <p className="mt-3 flex items-center gap-2 text-sm"><Download size={15} className="text-muted" /> Pour lire un document sans connexion, ouvrez-le puis utilisez « Télécharger ».</p>
         </section>
         <section className="card p-5">
-          <h2 className="flex items-center gap-2 font-serif text-lg font-semibold"><CloudOff size={18} className="text-crimson" /> Fonctions nécessitant Internet</h2>
+          <h2 className="flex items-center gap-2 font-serif text-lg font-medium"><CloudOff size={18} className="text-crimson" /> Fonctions nécessitant Internet</h2>
           <p className="mt-2 text-[14.5px]">Génération de résumés, de cartes et de quiz, tuteur IA, import et analyse de documents (OCR). Aucun modèle d’IA ne fonctionne sur l’appareil.</p>
           <Link to="/settings" className="mt-3 inline-block text-sm text-crimson hover:underline">Préférences de téléchargement</Link>
         </section>

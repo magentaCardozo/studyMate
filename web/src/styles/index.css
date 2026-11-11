@@ -24,13 +24,13 @@
 
 @layer components {
   .page {
-    @apply mx-auto w-full max-w-content px-4 pb-28 pt-6 md:px-8 md:pb-12 md:pt-8;
+    @apply mx-auto w-full max-w-content px-4 pb-40 pt-6 md:px-8 md:pb-12 md:pt-8;
   }
   .page-title {
-    @apply font-serif text-[26px] font-semibold leading-tight md:text-[34px];
+    @apply font-serif text-[30px] font-light leading-[1.1] tracking-[-0.02em] md:text-[40px];
   }
   .section-title {
-    @apply font-serif text-xl font-semibold md:text-[22px];
+    @apply font-serif text-[22px] font-normal tracking-[-0.01em] md:text-[25px];
   }
   .card {
     @apply rounded-lg border border-line bg-white shadow-card;

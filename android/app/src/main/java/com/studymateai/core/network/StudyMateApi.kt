@@ -42,6 +42,9 @@ interface StudyMateApi {
     @GET("api/v1/courses/{id}/knowledge-base")
     suspend fun knowledgeBase(@Path("id") id: String): Envelope<KnowledgeBaseDto>
 
+    @GET("api/v1/courses/{id}/knowledge-base/content")
+    suspend fun knowledgeBaseContent(@Path("id") id: String): Envelope<KbContentDto>
+
     @POST("api/v1/documents/{id}/confirm-upload")
     suspend fun confirmUpload(@Path("id") id: String): Envelope<DocumentDto>
 
@@ -65,6 +68,15 @@ interface StudyMateApi {
 
     @POST("api/v1/ai/ask")
     suspend fun ask(@Body body: AskRequest): Envelope<AskResponse>
+
+    @GET("api/v1/courses/{id}/revisions")
+    suspend fun revisions(@Path("id") id: String): Envelope<CourseRevisionsDto>
+
+    @GET("api/v1/review")
+    suspend fun review(): Envelope<ReviewDto>
+
+    @POST("api/v1/review/mistakes-quiz")
+    suspend fun mistakesQuiz(@Body body: MistakesQuizRequest): Envelope<IdDto>
 
     @GET("api/v1/summaries/{id}")
     suspend fun summary(@Path("id") id: String): Envelope<JsonElement>

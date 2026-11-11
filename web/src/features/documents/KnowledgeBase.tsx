@@ -3,6 +3,7 @@ import { ClipboardPaste, FileText, Layers, ListChecks, ScanLine, Timer, Upload }
 import { api } from '../../lib/api';
 import { plural } from '../../lib/format';
 import { Spinner } from '../../components/ui/Feedback';
+import { Button } from '../../components/ui/Button';
 import { useQuickActions } from './QuickActions';
 import type { GenerateKind } from '../smart-revision/GenerateDialog';
 
@@ -50,22 +51,35 @@ export function AddToKnowledgeBase({ courseId, folderId }: { courseId: string; f
   );
 }
 
+/** Version compacte des trois modes d'ajout, quand le dossier contient déjà des documents. */
+export function ImportButtons({ courseId }: { courseId: string }) {
+  const quick = useQuickActions();
+  const placement = { courseId, folderId: null };
+  return (
+    <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto">
+      <Button size="sm" icon={<Upload size={15} />} onClick={() => quick.openImport(placement)} aria-label="Importer un PDF">
+        <span className="sm:hidden">PDF</span><span className="hidden sm:inline">Importer un PDF</span>
+      </Button>
+      <Button size="sm" variant="secondary" icon={<ScanLine size={15} />} onClick={() => quick.openScan(placement)}>Scanner</Button>
+      <Button size="sm" variant="secondary" icon={<ClipboardPaste size={15} />} onClick={() => quick.openPaste(placement)} aria-label="Coller du texte">
+        <span className="sm:hidden">Texte</span><span className="hidden sm:inline">Coller du texte</span>
+      </Button>
+    </div>
+  );
+}
+
 export function KnowledgeBaseStatus({ stats }: { stats?: KnowledgeBaseStats }) {
   if (!stats) return null;
   if (!stats.documents) return <p className="meta">La base de connaissances est vide : ajoutez au moins un document pour pouvoir générer des révisions.</p>;
-  const parts = [
-    stats.bySource.file && plural(stats.bySource.file, 'fichier'),
-    stats.bySource.scan && plural(stats.bySource.scan, 'scan'),
-    stats.bySource.text && plural(stats.bySource.text, 'texte collé', 'textes collés'),
-  ].filter(Boolean);
   return (
-    <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-muted">
-      <span className="font-medium text-charcoal">{plural(stats.documents, 'document')}</span>
-      <span>({parts.join(', ')})</span>
-      <span>· {stats.ready} prêt{stats.ready > 1 ? 's' : ''}</span>
-      {stats.processing > 0 && <span className="inline-flex items-center gap-1 text-warning"><Spinner size={12} /> {stats.processing} en cours d’analyse</span>}
+    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[13px] text-muted">
+      <span>{plural(stats.documents, 'document')}</span>
+      {stats.processing > 0 ? (
+        <span className="inline-flex items-center gap-1 text-warning"><Spinner size={12} /> {stats.processing} en cours d’analyse</span>
+      ) : (
+        stats.ready === stats.documents && <span className="text-success">· tous analysés</span>
+      )}
       {stats.failed > 0 && <span className="text-danger">· {stats.failed} en échec</span>}
-      {stats.characters > 0 && <span>· ≈ {Math.max(1, Math.round(stats.characters / 1800))} page(s) de texte exploitable</span>}
     </p>
   );
 }

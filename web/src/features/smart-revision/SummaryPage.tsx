@@ -12,14 +12,14 @@ import { ConfirmDialog } from '../../components/ui/Dialog';
 import { Markdown } from '../../components/ui/Markdown';
 import { useToast } from '../../components/ui/Toast';
 import { useDocumentTitle } from '../../hooks/useUtils';
-import { GeneratedBadge, ReportButton, Sources } from './shared';
+import { GeneratedBadge, ReportButton, Sources, revisionCrumbs, revisionHome, withoutDemoNote } from './shared';
 
 const LENGTH: Record<string, string> = { brief: 'Bref', standard: 'Standard', detailed: 'Détaillé' };
 
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="card p-5">
-      <h2 className="mb-3 font-serif text-lg font-semibold">{title}</h2>
+      <h2 className="mb-3 font-serif text-lg font-medium">{title}</h2>
       {children}
     </section>
   );
@@ -39,18 +39,18 @@ export default function SummaryPage() {
 
   return (
     <div className="page max-w-4xl">
-      <Breadcrumbs items={[{ label: 'Révisions', to: '/revision' }, ...(s.course ? [{ label: s.course.title, to: `/courses/${s.course.id}` }] : []), { label: 'Résumé' }]} />
+      <Breadcrumbs items={revisionCrumbs(s.course, 'fiches', s.title)} />
       <PageHeader
         eyebrow={<div className="flex flex-wrap items-center gap-2"><GeneratedBadge provider={s.provider} /><span className="meta">{LENGTH[s.length]} · {formatDate(s.createdAt)}</span></div>}
-        title={c.mainTopic}
-        subtitle={s.title}
+        title={s.title}
+        subtitle={c.mainTopic && !s.title.includes(c.mainTopic) && !/^Dossier «/.test(c.mainTopic) ? c.mainTopic : undefined}
         actions={<Button variant="ghost" icon={<Trash2 size={15} />} onClick={() => setDel(true)}>Supprimer</Button>}
       />
       <div className="space-y-4">
-        {c.insufficientSource && <Notice tone="warning" title="Source insuffisante">Le contenu sélectionné ne permet pas un résumé complet. Les éléments ci-dessous sont limités à ce que contient le document.</Notice>}
-        {c.limitations.length > 0 && (
+        {c.insufficientSource && <Notice tone="warning" title="Source insuffisante">Les documents du dossier ne permettent pas une fiche complète. Les éléments ci-dessous sont limités à ce que contient le document.</Notice>}
+        {withoutDemoNote(c.limitations).length > 0 && (
           <Notice tone="info" title="À savoir">
-            <ul className="list-disc pl-4">{c.limitations.map((l) => <li key={l}>{l}</li>)}</ul>
+            <ul className="list-disc pl-4">{withoutDemoNote(c.limitations).map((l) => <li key={l}>{l}</li>)}</ul>
           </Notice>
         )}
         {c.keyConcepts.length > 0 && (
@@ -91,7 +91,7 @@ export default function SummaryPage() {
         )}
         {c.additionalExplanations.length > 0 && (
           <section className="rounded-lg border border-dashed border-warning/50 bg-warning-soft/40 p-5">
-            <h2 className="font-serif text-lg font-semibold">Explications complémentaires de l’IA</h2>
+            <h2 className="font-serif text-lg font-medium">Explications complémentaires de l’IA</h2>
             <p className="mb-3 text-[13px] text-muted">Ces éléments ne figurent pas dans vos documents : ils ont été ajoutés par l’IA et ne constituent pas un contenu de l’enseignant.</p>
             {c.additionalExplanations.map((a, i) => <div key={i} className="mb-3"><p className="font-medium">{a.title}</p><Markdown>{a.content}</Markdown></div>)}
           </section>
@@ -107,7 +107,7 @@ export default function SummaryPage() {
           <ReportButton targetType="summary" targetId={s.id} />
         </div>
       </div>
-      <ConfirmDialog open={del} onClose={() => setDel(false)} title="Supprimer ce résumé ?" message="Le résumé généré sera supprimé. Vos documents ne sont pas affectés." onConfirm={async () => { await api.del(`/summaries/${s.id}`); qc.invalidateQueries({ queryKey: ['summaries'] }); toast.show('Résumé supprimé.'); navigate('/revision'); }} />
+      <ConfirmDialog open={del} onClose={() => setDel(false)} title="Supprimer cette fiche ?" message="La fiche de révision sera supprimée. Vos documents ne sont pas affectés." onConfirm={async () => { await api.del(`/summaries/${s.id}`); qc.invalidateQueries({ queryKey: ['summaries'] }); toast.show('Fiche supprimée.'); navigate(revisionHome(s.course, 'fiches')); }} />
     </div>
   );
 }

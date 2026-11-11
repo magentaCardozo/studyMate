@@ -11,6 +11,7 @@ import com.studymateai.core.database.FolderEntity
 import com.studymateai.core.database.LessonEntity
 import com.studymateai.core.database.LocalQuizResultEntity
 import com.studymateai.core.database.NoteEntity
+import com.studymateai.core.network.SessionDto
 import com.studymateai.core.network.ApiException
 import com.studymateai.core.network.AskContext
 import com.studymateai.core.network.AskRequest
@@ -34,6 +35,10 @@ import com.studymateai.domain.SrsState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
+import com.studymateai.core.network.MistakesQuizRequest
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -54,30 +59,42 @@ class AuthRepository(
 
     suspend fun login(email: String, password: String): UserDto {
         val s = network.api.login(LoginRequest(email.trim().lowercase(), password)).data
-        tokens.save(s.accessToken, s.refreshToken)
-        prefs.setUser(s.user.name, s.user.email)
-        SyncWorker.schedulePeriodic(context)
-        return s.user
+        return startSession(s)
     }
 
     suspend fun register(name: String, email: String, password: String): UserDto {
         val s = network.api.register(RegisterRequest(name.trim(), email.trim().lowercase(), password, "fr", TimeZone.getDefault().id)).data
+        return startSession(s)
+    }
+
+    /**
+     * Ouverture de session. Si un autre compte était utilisé sur l'appareil (session expirée sans
+     * déconnexion), ses données locales sont effacées avant toute synchronisation : aucun compte
+     * ne voit les données d'un autre.
+     */
+    private suspend fun startSession(s: SessionDto): UserDto {
+        val previous = prefs.userEmail()
+        if (previous != null && !previous.equals(s.user.email, ignoreCase = true)) wipeLocalData()
         tokens.save(s.accessToken, s.refreshToken)
         prefs.setUser(s.user.name, s.user.email)
         SyncWorker.schedulePeriodic(context)
         return s.user
     }
 
-    /** Déconnexion : révocation côté serveur, puis effacement des données locales et fichiers téléchargés. */
-    suspend fun logout() {
-        tokens.refreshToken?.let { runCatching { network.api.logout(RefreshRequest(it)) } }
-        tokens.clear()
+    private suspend fun wipeLocalData() {
         SyncWorker.cancelAll(context)
         withContext(Dispatchers.IO) {
             db.clearAllTables()
             File(context.filesDir, "documents").deleteRecursively()
         }
         prefs.clear()
+    }
+
+    /** Déconnexion : révocation côté serveur, puis effacement des données locales et fichiers téléchargés. */
+    suspend fun logout() {
+        tokens.refreshToken?.let { runCatching { network.api.logout(RefreshRequest(it)) } }
+        tokens.clear()
+        wipeLocalData()
     }
 
     suspend fun setAiConsent(granted: Boolean) = network.api.aiConsent(ConsentRequest(granted)).data
@@ -179,6 +196,24 @@ class StudyRepository(private val context: Context, private val db: AppDatabase,
 
     suspend fun quiz(id: String) = db.quizzes().get(id)
     suspend fun saveLocalQuizResult(quizId: String, score: Double, max: Double) = db.quizzes().saveResult(LocalQuizResultEntity(quizId = quizId, score = score, maxScore = max, completedAt = System.currentTimeMillis()))
+
+    /**
+     * QCM terminé sur l'appareil : résultat local, et réponses envoyées au serveur par la file de
+     * synchronisation (même hors ligne) — le serveur les note et les erreurs remontent dans Révisions.
+     */
+    suspend fun saveQuizAttempt(quizId: String, score: Double, max: Double, responses: Map<String, Any>) {
+        saveLocalQuizResult(quizId, score, max)
+        fun json(v: Any): JsonElement = when (v) {
+            is Boolean -> JsonPrimitive(v)
+            is Number -> JsonPrimitive(v.toInt()) // indices des choix
+            is List<*> -> JsonArray(v.filterIsInstance<Number>().map { JsonPrimitive(it.toInt()) })
+            else -> JsonPrimitive(v.toString())
+        }
+        sync.enqueue("quiz_result", "create", UUID.randomUUID().toString(), buildJsonObject {
+            put("quizId", quizId)
+            put("responses", JsonArray(responses.map { (qid, r) -> buildJsonObject { put("questionId", qid); put("response", json(r)) } }))
+        })
+    }
 }
 
 /** Documents : téléchargement pour la lecture hors ligne, texte extrait, import de scans. */
@@ -245,6 +280,8 @@ class DocumentRepository(private val context: Context, private val db: AppDataba
     }
 
     suspend fun knowledgeBase(courseId: String) = network.api.knowledgeBase(courseId).data
+    /** Texte extrait de tous les documents du dossier, réuni (fichiers, scans, textes collés). */
+    suspend fun knowledgeBaseContent(courseId: String) = network.api.knowledgeBaseContent(courseId).data
 
     private suspend fun saveLocal(doc: com.studymateai.core.network.DocumentDto) {
         db.documents().upsert(listOf(DocumentEntity(doc.id, doc.fileName, doc.mimeType, doc.fileSize, doc.courseId, doc.folderId, doc.source, doc.processingStatus, null, null, null, null, doc.updatedAt)))
@@ -259,6 +296,12 @@ class OnlineRepository(private val network: NetworkModule) {
     suspend fun flashcards(courseId: String?, folderId: String?, lessonId: String?) = network.api.generateFlashcards(GenerateRequest(courseId = courseId, folderId = folderId, lessonId = lessonId, count = 12)).data.id
     /** Questionnaire à choix multiple (choix unique + choix multiples), mode entraînement. */
     suspend fun qcm(courseId: String?, folderId: String?, lessonId: String?) = network.api.generateQuiz(GenerateRequest(courseId = courseId, folderId = folderId, lessonId = lessonId, count = 10, types = listOf("SINGLE_CHOICE", "MULTIPLE_CHOICE"), mode = "practice")).data.id
+    /** Sous-dossiers QCM, Flash-cards et Fiches de révision d'un dossier. */
+    suspend fun revisions(courseId: String) = network.api.revisions(courseId).data
+    suspend fun summaryContent(id: String) = network.api.summary(id).data
+    /** Onglet Révisions (en ligne) et QCM de rattrapage avec les questions ratées. */
+    suspend fun review() = network.api.review().data
+    suspend fun mistakesQuiz(courseId: String? = null) = network.api.mistakesQuiz(MistakesQuizRequest(courseId)).data.id
     suspend fun ask(question: String, threadId: String?, courseId: String?, lessonId: String?) = network.api.ask(AskRequest(question, threadId, AskContext(courseId = courseId, lessonId = lessonId))).data
     suspend fun plan(accept: Boolean) = network.api.generatePlan(PlanRequest(preview = !accept)).data
     suspend fun overview() = network.api.overview().data

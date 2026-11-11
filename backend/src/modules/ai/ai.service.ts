@@ -37,6 +37,23 @@ export function setProvider(p: AiProvider | null) {
   provider = p;
 }
 
+const TITLE_PREFIX = { qcm: 'QCM', quiz: 'Quiz', mock: 'Examen blanc', flashcards: 'Flash-cards', fiche: 'Fiche de révision' } as const;
+
+/**
+ * Titre distinctif d'un contenu généré : « QCM n° 3 — Statistique ». Le numéro suit le nombre
+ * de contenus de ce type déjà rangés dans le dossier, pour qu'on les distingue dans les listes.
+ */
+async function numberedTitle(userId: string, kind: keyof typeof TITLE_PREFIX, ctx: GatheredContext) {
+  const where = { userId, courseId: ctx.courseId };
+  const existing =
+    kind === 'fiche'
+      ? await prisma.summary.count({ where })
+      : kind === 'flashcards'
+        ? await prisma.flashcardDeck.count({ where: { ...where, origin: 'ai' } })
+        : await prisma.quiz.count({ where: { ...where, title: { startsWith: TITLE_PREFIX[kind] } } });
+  return `${TITLE_PREFIX[kind]} n° ${existing + 1} — ${ctx.name}`.slice(0, 200);
+}
+
 export async function aiStatus(userId: string) {
   let p: AiProvider | null = null;
   try {
@@ -140,7 +157,7 @@ export async function generateSummary(userId: string, input: Scope & { length: '
       userId,
       courseId: ctx.courseId,
       lessonId: ctx.lessonId,
-      title: `Résumé — ${ctx.label}`,
+      title: await numberedTitle(userId, 'fiche', ctx),
       length: input.length,
       content: content as unknown as Prisma.InputJsonValue,
       sources: usedRefs(ctx.blocks, allIds) as unknown as Prisma.InputJsonValue,
@@ -174,7 +191,7 @@ export async function generateFlashcards(userId: string, input: Scope & { count:
       courseId: ctx.courseId,
       folderId,
       lessonId: ctx.lessonId,
-      title: input.deckTitle?.trim() || `Cartes — ${ctx.label}`,
+      title: input.deckTitle?.trim() || (await numberedTitle(userId, 'flashcards', ctx)),
       origin: 'ai',
       provider: p.name,
       sources: { refs: usedRefs(ctx.blocks, allIds), limitations: [...output.limitations, ...coverageNote(ctx)] } as unknown as Prisma.InputJsonValue,
@@ -236,7 +253,7 @@ export async function generateQuiz(userId: string, input: QuizGenInput) {
       userId,
       courseId: ctx.courseId,
       lessonId: ctx.lessonId,
-      title: input.title?.trim() || `${input.isMockExam ? 'Examen blanc' : input.types.every((t) => t === 'SINGLE_CHOICE' || t === 'MULTIPLE_CHOICE') ? 'QCM' : 'Quiz'} — ${ctx.label}`,
+      title: input.title?.trim() || (await numberedTitle(userId, input.isMockExam ? 'mock' : input.types.every((t) => t === 'SINGLE_CHOICE' || t === 'MULTIPLE_CHOICE') ? 'qcm' : 'quiz', ctx)),
       origin: 'ai',
       provider: p.name,
       configuration: { mode: input.mode, timed: input.timed, durationMinutes: input.timed ? (input.durationMinutes ?? null) : null, difficulty: input.difficulty, questionTypes: input.types, isMockExam: input.isMockExam, limitations },

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, FileImage, FileText, FolderInput, Pin, PinOff, Trash2, Pencil } from 'lucide-react';
+import { ClipboardPaste, Download, FileImage, FileText, FolderInput, Pin, PinOff, ScanLine, Trash2, Pencil } from 'lucide-react';
 import { api } from '../../lib/api';
 import { fileKind, formatSize, relativeDay, STATUS_LABEL } from '../../lib/format';
 import { openDocument } from '../../lib/upload';
@@ -43,17 +43,21 @@ export function DocumentRow({ doc, onMove }: { doc: DocumentItem; onMove: () => 
   const [rename, setRename] = useState(false);
   const [name, setName] = useState(doc.fileName.replace(/\.[^.]+$/, ''));
   const [del, setDel] = useState(false);
-  const Icon = doc.mimeType.startsWith('image/') ? FileImage : FileText;
+  // L'icône et le libellé indiquent le mode d'ajout : fichier, scan ou texte collé.
+  const Icon = doc.source === 'text' ? ClipboardPaste : doc.source === 'scan' ? ScanLine : doc.mimeType.startsWith('image/') ? FileImage : FileText;
+  const kind = doc.source === 'text' ? 'Texte collé' : doc.source === 'scan' ? 'Scan' : fileKind(doc.mimeType);
   return (
     <li className="flex items-center gap-3 px-4 py-3 hover:bg-ivory/50">
-      <Icon size={18} className="shrink-0 text-muted" aria-hidden />
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-crimson-soft/60 text-crimson" aria-hidden>
+        <Icon size={17} />
+      </span>
       <Link to={`/documents/${doc.id}`} className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 truncate text-sm font-medium hover:text-crimson">
           {doc.pinned && <Pin size={12} className="text-crimson" aria-label="Épinglé" />}
           {doc.fileName}
         </p>
         <p className="meta truncate">
-          {fileKind(doc.mimeType)} · {formatSize(doc.fileSize)}
+          {kind} · {formatSize(doc.fileSize)}
           {doc.pageCount ? ` · ${doc.pageCount} p.` : ''} · {relativeDay(doc.createdAt)}
         </p>
       </Link>

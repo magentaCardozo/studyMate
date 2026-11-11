@@ -13,7 +13,7 @@ import { ConfirmDialog, Dialog } from '../../components/ui/Dialog';
 import { Markdown } from '../../components/ui/Markdown';
 import { useToast } from '../../components/ui/Toast';
 import { useDocumentTitle } from '../../hooks/useUtils';
-import { GeneratedBadge, ReportButton, Sources } from './shared';
+import { GeneratedBadge, ReportButton, Sources, revisionCrumbs, revisionHome, withoutDemoNote } from './shared';
 import { PlacementPicker, type PlacementValue } from '../courses/PlacementPicker';
 
 function CardDialog({ deckId, card, onClose }: { deckId: string; card?: Flashcard; onClose: () => void }) {
@@ -74,12 +74,12 @@ export default function DeckPage() {
   const [delDeck, setDelDeck] = useState(false);
   if (isLoading) return <Loading />;
   if (error || !deck) return <div className="page"><ErrorState error={error} onRetry={refetch} /></div>;
-  const limitations = Array.isArray(deck.sources) ? [] : deck.sources.limitations ?? [];
+  const limitations = withoutDemoNote(Array.isArray(deck.sources) ? [] : deck.sources.limitations);
   const toStudy = deck.counts.due + deck.counts.new;
 
   return (
     <div className="page max-w-4xl">
-      <Breadcrumbs items={[{ label: 'Révisions', to: '/revision' }, ...(deck.course ? [{ label: deck.course.title, to: `/courses/${deck.course.id}` }] : []), { label: deck.title }]} />
+      <Breadcrumbs items={revisionCrumbs(deck.course, 'flashcards', deck.title)} />
       <PageHeader
         eyebrow={<div className="flex flex-wrap gap-2">{deck.origin === 'ai' ? <GeneratedBadge provider={deck.provider} /> : <Badge tone="neutral">Créé manuellement</Badge>}{deck.lesson && <Link to={`/lessons/${deck.lesson.id}`} className="meta hover:text-crimson">Leçon : {deck.lesson.title}</Link>}</div>}
         title={deck.title}
@@ -123,7 +123,7 @@ export default function DeckPage() {
       </div>
       {editing !== undefined && <CardDialog deckId={deck.id} card={editing ?? undefined} onClose={() => setEditing(undefined)} />}
       <ConfirmDialog open={!!delCard} onClose={() => setDelCard(null)} title="Supprimer la carte ?" message="La carte et son historique de révision seront supprimés." onConfirm={async () => { await api.del(`/flashcards/cards/${delCard!.id}`); qc.invalidateQueries({ queryKey: ['deck', id] }); toast.show('Carte supprimée.'); }} />
-      <ConfirmDialog open={delDeck} onClose={() => setDelDeck(false)} title="Supprimer le paquet ?" message={`« ${deck.title} » et toutes ses cartes seront supprimés.`} onConfirm={async () => { await api.del(`/flashcards/decks/${deck.id}`); qc.invalidateQueries({ queryKey: ['decks'] }); toast.show('Paquet supprimé.'); navigate('/revision'); }} />
+      <ConfirmDialog open={delDeck} onClose={() => setDelDeck(false)} title="Supprimer le paquet ?" message={`« ${deck.title} » et toutes ses cartes seront supprimés.`} onConfirm={async () => { await api.del(`/flashcards/decks/${deck.id}`); qc.invalidateQueries({ queryKey: ['decks'] }); toast.show('Paquet supprimé.'); navigate(revisionHome(deck.course, 'flashcards')); }} />
     </div>
   );
 }

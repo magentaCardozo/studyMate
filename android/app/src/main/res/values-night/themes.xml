@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Téléphone en thème sombre : fond de fenêtre sombre dès le lancement (pas de flash clair). -->
+    <style name="Theme.StudyMate" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ivory</item>
+        <item name="android:statusBarColor">@color/ivory</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <style name="Theme.StudyMate.Splash" parent="Theme.StudyMate">
+        <item name="android:windowBackground">@drawable/splash</item>
+    </style>
+</resources>

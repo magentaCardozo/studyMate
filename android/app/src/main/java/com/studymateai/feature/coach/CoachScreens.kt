@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.studymateai.core.designsystem.BandHeader
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -87,9 +88,10 @@ fun CoachScreen(onChat: () -> Unit, onLesson: (String) -> Unit) {
         }
     }
 
+    Column {
+    BandHeader("Mon coach", subtitle = "Programme de révision et tuteur")
     LazyColumn(contentPadding = ScreenPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
-            SectionTitle("Mon coach")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SecondaryButton("Tuteur IA", onChat, icon = Icons.Outlined.Chat)
                 SecondaryButton("Proposer un programme", { plan(false) }, icon = Icons.Outlined.AutoAwesome, enabled = online && !busy)
@@ -143,6 +145,7 @@ fun CoachScreen(onChat: () -> Unit, onLesson: (String) -> Unit) {
             }
         }
     }
+    }
 }
 
 data class ChatLine(val role: String, val text: String, val sources: String? = null)
@@ -166,7 +169,7 @@ fun ChatScreen(courseId: String?, lessonId: String?, onBack: () -> Unit) {
                 if (!online) Notice("Le tuteur nécessite une connexion Internet.")
             }
             items(lines) { l ->
-                if (l.role == "user") Text(l.text, color = SM.White, modifier = Modifier.fillMaxWidth().background(SM.Charcoal, RoundedCornerShape(10.dp)).padding(12.dp))
+                if (l.role == "user") Text(l.text, color = SM.OnCrimson, modifier = Modifier.fillMaxWidth().background(SM.Crimson, RoundedCornerShape(10.dp)).padding(12.dp))
                 else SmCard {
                     MarkdownText(l.text)
                     l.sources?.let { Text("Sources : $it", style = MaterialTheme.typography.bodySmall) }

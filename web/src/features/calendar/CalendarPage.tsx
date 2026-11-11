@@ -67,7 +67,7 @@ export default function CalendarPage() {
         <Button size="sm" variant="secondary" onClick={() => setCursor(new Date())}>Aujourd’hui</Button>
         <button type="button" aria-label="Précédent" className="rounded-md p-2 hover:bg-white" onClick={() => step(-1)}><ChevronLeft size={18} /></button>
         <button type="button" aria-label="Suivant" className="rounded-md p-2 hover:bg-white" onClick={() => step(1)}><ChevronRight size={18} /></button>
-        <h2 className="font-serif text-lg font-semibold capitalize">{title}</h2>
+        <h2 className="font-serif text-lg font-medium capitalize">{title}</h2>
         <div className="ml-auto"><Segmented label="Vue" value={view} onChange={setView} options={[{ id: 'month', label: 'Mois' }, { id: 'week', label: 'Semaine' }, { id: 'day', label: 'Jour' }]} /></div>
       </div>
       {error ? <ErrorState error={error} onRetry={refetch} /> : isLoading || !data ? <Loading /> : view === 'month' ? (

@@ -65,7 +65,7 @@ function AvailabilityCard() {
   const total = Object.values(avail).reduce((a, b) => a + b, 0);
   return (
     <section className="card p-5">
-      <h2 className="mb-1 flex items-center gap-2 font-serif text-lg font-semibold"><Clock size={18} className="text-crimson" /> Mes disponibilités</h2>
+      <h2 className="mb-1 flex items-center gap-2 font-serif text-lg font-medium"><Clock size={18} className="text-crimson" /> Mes disponibilités</h2>
       <p className="meta mb-4">Temps d’étude par jour (minutes). Le programme ne dépassera jamais ces durées. Total : {Math.round(total / 60)} h par semaine.</p>
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
         {DAYS.map((d) => (

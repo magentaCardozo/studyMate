@@ -9,6 +9,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import com.studymateai.core.designsystem.ThemeMode
 
 private val Context.dataStore by preferencesDataStore(name = "studymate_prefs")
 
@@ -22,6 +23,7 @@ class Preferences(private val context: Context) {
         val lastConflict = stringPreferencesKey("last_conflict")
         val userName = stringPreferencesKey("user_name")
         val userEmail = stringPreferencesKey("user_email")
+        val theme = stringPreferencesKey("theme_mode")
     }
 
     val wifiOnly: Flow<Boolean> = context.dataStore.data.map { it[Keys.wifiOnly] ?: true }
@@ -31,10 +33,16 @@ class Preferences(private val context: Context) {
     val userName: Flow<String?> = context.dataStore.data.map { it[Keys.userName] }
     val userEmail: Flow<String?> = context.dataStore.data.map { it[Keys.userEmail] }
 
+    /** Thème choisi dans le profil (préférence de l'appareil, conservée à la déconnexion). */
+    val theme: Flow<ThemeMode> = context.dataStore.data.map { p -> ThemeMode.entries.find { it.name == p[Keys.theme] } ?: ThemeMode.SYSTEM }
+    suspend fun setTheme(mode: ThemeMode) = context.dataStore.edit { it[Keys.theme] = mode.name }
+
     suspend fun lastSyncCursor(): String? = context.dataStore.data.first()[Keys.lastSync]
     suspend fun isWifiOnly(): Boolean = wifiOnly.first()
 
     suspend fun setWifiOnly(v: Boolean) = context.dataStore.edit { it[Keys.wifiOnly] = v }
+    suspend fun userEmail(): String? = context.dataStore.data.first()[Keys.userEmail]
+
     suspend fun setUser(name: String, email: String) = context.dataStore.edit { it[Keys.userName] = name; it[Keys.userEmail] = email }
 
     suspend fun syncSucceeded(cursor: String) = context.dataStore.edit {
@@ -45,5 +53,9 @@ class Preferences(private val context: Context) {
 
     suspend fun syncFailed(message: String) = context.dataStore.edit { it[Keys.lastSyncError] = message }
     suspend fun setConflict(message: String?) = context.dataStore.edit { if (message == null) it.remove(Keys.lastConflict) else it[Keys.lastConflict] = message }
-    suspend fun clear() = context.dataStore.edit { it.clear() }
+    suspend fun clear() = context.dataStore.edit {
+        val theme = it[Keys.theme]
+        it.clear()
+        theme?.let { t -> it[Keys.theme] = t }
+    }
 }

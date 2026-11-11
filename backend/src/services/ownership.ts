@@ -105,20 +105,20 @@ export async function resolvePlacement(
 }
 
 /**
- * Emplacement d'un document de la base de connaissances : un dossier (obligatoire)
- * et éventuellement un de ses sous-dossiers. Un document ne peut pas en contenir un autre.
+ * Emplacement d'un document : toujours la racine du dossier du cours (seul endroit où l'on
+ * dépose des documents ; les sous-dossiers QCM, Flash-cards et Fiches ne contiennent que du
+ * contenu généré). Un ancien client qui indique un sous-dossier est ramené à son dossier.
  */
 export async function resolveDocumentPlacement(userId: string, p: { courseId?: string | null; folderId?: string | null }) {
   let courseId = p.courseId ?? null;
-  const folderId = p.folderId ?? null;
-  if (folderId) {
-    const folder = await ownedFolder(userId, folderId);
-    if (courseId && courseId !== folder.courseId) throw badRequest('Le sous-dossier ne fait pas partie de ce dossier.');
+  if (p.folderId) {
+    const folder = await ownedFolder(userId, p.folderId);
+    if (courseId && courseId !== folder.courseId) throw badRequest('Ce sous-dossier ne fait pas partie de ce dossier.');
     courseId = folder.courseId;
   }
-  if (!courseId) throw badRequest("Créez ou choisissez d'abord un dossier : chaque document appartient à un dossier.", undefined, 'FOLDER_REQUIRED');
+  if (!courseId) throw badRequest("Créez ou choisissez d'abord le dossier du cours : chaque document y est déposé.", undefined, 'FOLDER_REQUIRED');
   await ownedCourse(userId, courseId);
-  return { courseId, folderId };
+  return { courseId, folderId: null as string | null };
 }
 
 export async function tombstone(userId: string, entity: string, entityId: string) {

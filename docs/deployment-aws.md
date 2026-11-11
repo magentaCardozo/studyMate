@@ -44,9 +44,15 @@ L'état (identifiants, IP, adresse) est écrit dans `infrastructure/deployment/a
 ### Mettre à jour l'application
 
 ```bash
-cd android && ./gradlew :app:assembleDebug -Pstudymate.apiUrl=https://<adresse>/ && mkdir -p dist && cp app/build/outputs/apk/debug/app-debug.apk dist/studymate.apk && cd ..
+./android/scripts/build-apk.sh "" "Nouveautés de cette version (affichées sur le téléphone)"
 ./infrastructure/deployment/aws/deploy.sh
 ```
+
+`build-apk.sh` lit l'adresse du serveur dans `aws/.state` et donne à l'APK un numéro de version croissant : le nombre de minutes depuis le 1er janvier 2026. Il écrit aussi `android/dist/version.json`, qui contient ce numéro, l'empreinte SHA-256, la taille et les notes. `deploy.sh` publie les deux fichiers dans `/telecharger/`, l'APK d'abord, le manifeste ensuite.
+
+**Mises à jour sur les téléphones :** l'application consulte `https://<adresse>/telecharger/version.json` au lancement et à chaque retour au premier plan, ainsi que depuis Profil › « Rechercher une mise à jour ». Quand une version plus récente existe, elle propose « Mettre à jour ». Elle télécharge alors l'APK, vérifie sa taille et son empreinte, puis ouvre l'installateur d'Android. La première fois, Android demande d'autoriser StudyMate AI à installer des applications. Les données de l'application sont conservées.
+
+> Une mise à jour ne s'installe que si l'APK est signé avec **la même clé** que la version installée. L'APK de test est signé avec la clé de débogage de la machine qui le construit (`~/.android/debug.keystore`) : il faut toujours le construire sur la même machine, ou conserver cette clé. Pour une vraie diffusion, il faut une clé de signature dédiée, sauvegardée.
 
 La version précédente reste dans `/opt/studymate/app.prev` sur le serveur (retour arrière : la remettre en place puis relancer `docker compose … up -d`).
 

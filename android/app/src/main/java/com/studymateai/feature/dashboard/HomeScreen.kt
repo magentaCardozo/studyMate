@@ -16,6 +16,8 @@ import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.studymateai.core.designsystem.BandHeader
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -55,11 +57,10 @@ fun HomeScreen(onCourse: (String) -> Unit, onCourses: () -> Unit, onStudy: () ->
     val due = counts.sumOf { it.due }
     val exams = goals.filter { it.kind == "exam" && it.targetDate != null && Instant.parse(it.targetDate) > Instant.now() }
 
+    Column {
+    BandHeader("Bonjour, ${name?.substringBefore(' ') ?: ""}", subtitle = "Votre espace d’apprentissage du jour")
     LazyColumn(contentPadding = ScreenPadding, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text("Bonjour, ${name?.substringBefore(' ') ?: ""}", style = MaterialTheme.typography.headlineLarge)
-            Text("Voici votre espace d'apprentissage pour aujourd'hui.", style = MaterialTheme.typography.bodyMedium.copy(color = SM.Muted))
-            Spacer(Modifier.height(8.dp))
             if (due > 0) PrimaryButton("Continuer mes révisions ($due cartes)", onStudy, Modifier.fillMaxWidth(), icon = Icons.Outlined.Style)
         }
         if (courses.isEmpty()) {
@@ -106,5 +107,6 @@ fun HomeScreen(onCourse: (String) -> Unit, onCourses: () -> Unit, onStudy: () ->
             Spacer(Modifier.height(4.dp))
             SecondaryButton("Scanner un document", onScan, icon = Icons.Outlined.DocumentScanner)
         }
+    }
     }
 }

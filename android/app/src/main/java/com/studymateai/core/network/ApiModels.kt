@@ -210,6 +210,45 @@ data class PasteTextRequest(val title: String, val content: String, val courseId
 @Serializable
 data class KnowledgeBaseDto(val documents: Int, val ready: Int, val processing: Int, val failed: Int, val characters: Int, val canGenerate: Boolean)
 
+/** Onglet Révisions : QCM à terminer, questions ratées, flash-cards à réviser. */
+@Serializable
+data class RefDto(val id: String, val title: String)
+
+@Serializable
+data class ToFinishDto(val quizId: String, val title: String, val course: RefDto? = null, val isMockExam: Boolean = false, val isReview: Boolean = false, val totalQuestions: Int, val status: String, val answered: Int = 0, val startedAt: String? = null)
+
+@Serializable
+data class MistakeDto(val questionId: String, val question: String, val quiz: RefDto, val course: RefDto? = null, val wrongCount: Int, val lastAnsweredAt: String)
+
+@Serializable
+data class CardCountsDto(val due: Int, val new: Int)
+
+@Serializable
+data class ReviewDto(val toFinish: List<ToFinishDto>, val mistakes: List<MistakeDto>, val cards: CardCountsDto)
+
+@Serializable
+data class MistakesQuizRequest(val courseId: String? = null)
+
+/** Base de connaissances réunie : texte extrait de tous les documents du dossier. */
+@Serializable
+data class KbPageDto(val page: Int? = null, val text: String, val source: String? = null, val aVerifier: List<String> = emptyList(), val texteImages: String? = null)
+
+@Serializable
+data class KbDocumentDto(val id: String, val fileName: String, val source: String, val pageCount: Int? = null, val createdAt: String, val corrected: Boolean = false, val pages: List<KbPageDto>)
+
+@Serializable
+data class KbPendingDto(val id: String, val fileName: String, val status: String)
+
+@Serializable
+data class KbContentDto(val courseId: String, val title: String, val characters: Int, val documents: List<KbDocumentDto>, val pending: List<KbPendingDto> = emptyList())
+
+/** Contenu des trois sous-dossiers fixes d'un dossier, du plus récent au plus ancien. */
+@Serializable
+data class RevisionItemDto(val id: String, val title: String, val createdAt: String, val questions: Int? = null, val lastScore: Int? = null, val cards: Int? = null, val length: String? = null)
+
+@Serializable
+data class CourseRevisionsDto(val courseId: String, val qcm: List<RevisionItemDto>, val flashcards: List<RevisionItemDto>, val fiches: List<RevisionItemDto>)
+
 @Serializable
 data class UploadInfo(val method: String, val url: String, val headers: Map<String, String> = emptyMap())
 

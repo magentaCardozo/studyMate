@@ -106,7 +106,7 @@ export default function ChatPage() {
       </aside>
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          <h1 className="font-serif text-xl font-semibold">Tuteur IA</h1>
+          <h1 className="font-serif text-xl font-medium">Tuteur IA</h1>
           <span className="chip"><BookOpen size={12} /> {ctxLabel}</span>
           {!threadId && !preset && (
             <Select aria-label="Contexte" className="h-9 w-auto text-sm" value={scope.courseId ?? ''} onChange={(e) => setScope({ courseId: e.target.value || undefined })}>
@@ -123,7 +123,7 @@ export default function ChatPage() {
           {!threadId && !optimistic && (
             <div className="py-6 text-center">
               <MessageCircle size={28} className="mx-auto text-crimson" />
-              <p className="mt-2 font-serif text-lg font-semibold">Posez votre question</p>
+              <p className="mt-2 font-serif text-lg font-medium">Posez votre question</p>
               <p className="meta mx-auto max-w-md">Le tuteur s’appuie en priorité sur vos documents et cite ses sources. Il vous guide pas à pas plutôt que de donner directement la réponse.</p>
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 {SUGGESTIONS.map((s) => <button key={s} type="button" onClick={() => send(s)} className="chip hover:border-crimson hover:text-crimson">{s}</button>)}

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Brain, CalendarDays, ClipboardPaste, CloudOff, Compass, FolderOpen, FolderPlus, Home, LineChart, LogOut, Plus, ScanLine, Search, Settings, Sparkles, Upload, User as UserIcon, WifiOff } from 'lucide-react';
+import { Bell, CalendarDays, ClipboardPaste, CloudOff, Compass, FolderOpen, FolderPlus, Home, LineChart, LogOut, Plus, ScanLine, Search, Settings, Sparkles, Upload, User as UserIcon, WifiOff } from 'lucide-react';
 import { Logo } from '../ui/Logo';
 import { useAuth } from '../../hooks/useAuth';
 import { useOnline } from '../../hooks/useUtils';
@@ -22,9 +22,9 @@ const primary: { to: string; key: TKey; icon: ReactNode; end?: boolean }[] = [
 
 const mobile: { to: string; key: TKey; icon: ReactNode; end?: boolean }[] = [
   { to: '/', key: 'nav.overview', icon: <Home size={20} />, end: true },
-  { to: '/courses', key: 'nav.courses', icon: <FolderOpen size={20} /> },
+  { to: '/courses', key: 'nav.coursesShort', icon: <FolderOpen size={20} /> },
   { to: '/revision', key: 'nav.revision', icon: <Sparkles size={20} /> },
-  { to: '/coach', key: 'nav.coach', icon: <Brain size={20} /> },
+  { to: '/coach', key: 'nav.coach', icon: <Compass size={20} /> },
   { to: '/settings', key: 'nav.profile', icon: <UserIcon size={20} /> },
 ];
 
